@@ -1,0 +1,117 @@
+EXAMEN CAR --DOCUMENTACIÓN--
+----------------------------
+
+### Flujos
+
+    onExecuted() --> showTimeOut() --> showStats()
+
+### Debugging
+
+Ver respuestas verdaderas y que cantidad son por pregunta
+
+    debug=1
+
+Desactivar contador de eventos
+
+    ?event_counter=0
+
+Simular membresia
+
+    &member=1
+
+Simular no-membresia
+
+    ?member=0
+
+Ej:
+
+    ?event_counter=0&member=0
+    ?event_counter=0&member=1
+
+Cargar solo los IDs de las preguntas que interesan
+
+    ?q_ids=1428
+    ?debug=1&q_ids=1428
+    ?debug=1&q_ids=1428,1560,4666
+    
+
+### Cuestionario
+
+# Respuestas al azar
+
+    answerRandom()
+    
+# Saber si aprueba
+
+    hasPassed()
+
+# Reiniciar questionario
+    
+    restartTest()
+
+# Debug
+
+Hay un modo "debug" que muestra las respuestas verdaderas (V) y falsas (F)
+
+    debug()
+
+
+### Estadisticas
+
+# Score
+
+    getScore()
+
+# Estadisticas completas en consola
+
+    stats() 
+
+Salida:
+
+    Score     4
+    Preguntas 35
+    Correctas 3
+    Fallidas  32
+
+
+### Ventanas modales
+
+# Alert TimeOut
+
+    showTimeOut()
+
+
+### Cronometro
+
+# Detener el tiempo
+
+    cronometer.stop()
+
+# Continuar
+
+    cronometer.start()
+
+# Cambiar el tiempo restante
+
+Ej:
+
+    cronometer.start('00:10:00')
+
+
+### Importador
+
+Se puede importar desde formato CSV con la siguiente cabecera descriptora de campos:
+
+"No PREGUNTA",	
+"PREGUNTA",
+"IMAGEN URL",
+"RESPUESTA_A",	
+"RESPUESTA_B"
+"RESPUESTA_C"
+"RESPUESTA_D"
+"RESPUESTA_E"
+"RESPUESTA_F"
+"LETRA_RESPUESTA_CORRECTA",
+"PISTA",
+"EXPLICACION"
+

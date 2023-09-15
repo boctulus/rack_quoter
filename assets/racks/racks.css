@@ -1,0 +1,46 @@
+@charset "UTF-8";
+
+@font-face {
+    font-family: 'MontserratRegular';
+    src: url(/assets/fonts/MontserratRegular/MontserratRegular.woff2) format("woff2"), url(/assets/fonts/MontserratRegular/MontserratRegular.woff) format("woff")
+}
+
+@font-face {
+    font-family: 'MontserratBold';
+    src: url(/assets/fonts/MontserratBold/MontserratBold.woff2) format("woff2"), url(/assets/fonts/MontserratBold/MontserratBold.woff) format("woff")
+}
+
+@font-face {
+    font-family: 'LatoItalic';
+    src: url(/assets/fonts/LatoItalic/LatoItalic.woff2) format("woff2"), url(/assets/fonts/LatoItalic/LatoItalic.woff) format("woff")
+}
+
+@font-face {
+    font-family: 'LatoBlackItalic';
+    src: url(/assets/fonts/LatoBlackItalic/LatoBlackItalic.woff2) format('woff2'), url(/assets/fonts/LatoBlackItalic/LatoBlackItalic.woff) format('woff')
+}
+
+@font-face {
+    font-family: 'LatoLight';
+    src: url(/assets/fonts/LatoLight/LatoLight.woff2) format('woff2'), url(fonts/LatoLight/LatoLight.woff) format('woff')
+}
+
+@font-face {
+    font-family: 'MyraidProRegular';
+    src: url(/assets/fonts/MyraidProRegular/MyraidProRegular.woff2) format("woff2"), url(/assets/fonts/MyraidProRegular/MyraidProRegular.woff) format("woff")
+}
+
+@font-face {
+    font-family: 'MyraidProSemibold';
+    src: url(/assets/fonts/MyraidProSemibold/MyraidProSemibold.woff2) format("woff2"), url(/assets/fonts/MyraidProSemibold/MyraidProSemibold.woff) format("woff")
+}
+
+@font-face {
+    font-family: 'MyraidProBold';
+    src: url(/assets/fonts/MyraidProBold/MyraidProBold.woff2) format("woff2"), url(/assets/fonts/MyraidProBold/MyraidProBold.woff) format("woff")
+}
+
+@font-face {
+    font-family: 'MyraidProSemiboldItalic';
+    src: url(/assets/fonts/MyraidProSemiboldItalic/MyraidProSemiboldItalic.woff2) format("woff2"), url(/assets/fonts/MyraidProSemiboldItalic/MyraidProSemiboldItalic.woff) format("woff")
+}

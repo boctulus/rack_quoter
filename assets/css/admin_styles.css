@@ -1,0 +1,21 @@
+/*
+  New loader
+*/
+
+/* Estilos para el contenedor del loader */
+#loading-text {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.99);;
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+  text-align: center; /* Centrar el contenido horizontalmente */
+  width: 400px;
+  height: 200px;
+  padding-top: 40px;
+}

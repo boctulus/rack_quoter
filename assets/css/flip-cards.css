@@ -1,0 +1,224 @@
+/* 
+    Botones redondeados
+*/
+
+.sr-rounded-pill-button {
+    display: inline-block;
+    padding: 14px 20px;
+    border-radius: 20px;
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.sr-btn-blue {
+    background-color: #5F79F9;
+    color: white;
+}
+
+.sr-btn-green {
+    background-color: #0DA078;
+    color: white;
+}
+
+.sr-btn-red {
+    background-color: red;
+    color: white;
+}
+
+.sr-btn-black {
+    background-color: #000000;
+    color: white;
+}
+
+.sr-btn-disabled {
+    background-color: #C7C7C7;
+    color: white;
+}
+
+.sr-rounded-pill-button:hover,
+.sr-rounded-pill-button:focus,
+.sr-rounded-pill-button:active {
+    color: white !important;
+}
+
+.sr-btn-red.sr-rounded-pill-button:hover,
+.sr-btn-red.sr-rounded-pill-button:focus,
+.sr-btn-red.sr-rounded-pill-button:active {
+    background-color: #f40000;
+}
+
+
+/*
+    Extra: pills del mismo width
+*/
+
+.sr-rounded-pill-button {
+    width: 80px;
+}
+
+/*
+    Flip cards
+*/
+
+.sr-card-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+    /* Asegurar alineación vertical */
+    perspective: 500px;
+}
+
+.sr-card {
+    position: relative;
+    width: 100%;
+    height: 300px;
+}
+
+.sr-card-content {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    transform-style: preserve-3d;
+    transition: transform 0.5s;
+}
+
+/*
+    Animacion
+*/
+.sr-card:hover .sr-card-content {
+    transform: rotateY(180deg);
+}
+
+.sr-card-front,
+.sr-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 5px;
+    backface-visibility: hidden;
+    overflow: hidden;
+    /* Ensure the overlay doesn't overflow */
+}
+
+/* White text on the front side */
+.sr-card-front-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 24px;
+    line-height: 150%;
+    text-align: center;
+}
+
+.sr-card-back {
+    text-align: center;
+    /* horizontal alignment */
+    background: #03446A;
+    color: white;
+    transform: rotateY(180deg);
+    font-size: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/*
+    Extras
+
+    - Coloco imagen de fondo en la cara frontal
+    - Creo overlay sobre la imagen para aumentar contraste 
+*/
+
+.sr-card-front {
+    background-image: var(--img-url);
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: contain;
+    /* Cambiado a 'contain' para ajustar la imagen sin recortes */
+}
+
+/* Overlay for the front side */
+.sr-card-front::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    /* Overlay color and opacity */
+}
+
+/*
+    Banda diagnal
+*/
+
+.sr-card-ribbon {
+    position: absolute;
+    right: -5px;
+    top: -5px;
+    z-index: 1;
+    overflow: hidden;
+    width: 75px;
+    height: 75px;
+    text-align: right;
+}
+
+.sr-card-ribbon span {
+    font-size: 10px;
+    color: #fff;
+    text-transform: uppercase;
+    text-align: center;
+    font-weight: bold;
+    line-height: 20px;
+    transform: rotate(45deg);
+    width: 100px;
+    display: block;
+    background: #79A70A;
+    background: linear-gradient(#9BC90D 0%, #79A70A 100%);
+    box-shadow: 0 3px 10px -5px rgba(0, 0, 0, 1);
+    position: absolute;
+    top: 19px;
+    right: -21px;
+}
+
+.sr-card-ribbon span::before {
+    content: '';
+    position: absolute;
+    left: 0px;
+    top: 100%;
+    z-index: -1;
+    border-left: 3px solid #79A70A;
+    border-right: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+    border-top: 3px solid #79A70A;
+}
+
+.sr-card-ribbon span::after {
+    content: '';
+    position: absolute;
+    right: 0%;
+    top: 100%;
+    z-index: -1;
+    border-right: 3px solid #79A70A;
+    border-left: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+    border-top: 3px solid #79A70A;
+}
+
+
+.sr-card-ribbon-red span {background: linear-gradient(#F70505 0%, #8F0808 100%);}
+.sr-card-ribbon-red span::before {border-left-color: #8F0808; border-top-color: #8F0808;}
+.sr-card-ribbon-red span::after {border-right-color: #8F0808; border-top-color: #8F0808;}
+
+.sr-card-ribbon-blue span {background: linear-gradient(#2989d8 0%, #1e5799 100%);}
+.sr-card-ribbon-blue span::before {border-left-color: #1e5799; border-top-color: #1e5799;}
+.sr-card-ribbon-blue span::after {border-right-color: #1e5799; border-top-color: #1e5799;}
+

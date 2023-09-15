@@ -1,0 +1,19 @@
+{
+    "name": "boctulus/rack_quoter",
+    "authors": [
+        {
+            "name": "Abilo Escalona",
+            "email": "smstotalmarketing@gmail.com"
+        },
+        {
+            "name": "Pablo Gabriel Bozzolo <boctulus>",
+            "email": "boctulus@gmail.com"
+        }
+    ],
+    "config": {
+        "platform-check": false
+    },
+    "require": {
+        "php": ">=7.4"
+    }
+}

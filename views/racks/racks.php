@@ -104,7 +104,7 @@
         </div>
         <div class="-item -img">
           <!---->
-          <img src="<?= asset('images/NewPalletRack.png') ?>" alt="" data-ng-if="!!controller.Model.SelectedItem" class="" style="">
+          <img src="<?= asset('racks/images/NewPalletRack.png') ?>" alt="" data-ng-if="!!controller.Model.SelectedItem" class="" style="">
           <!---->
           <p class="-img-caption" lang-bind="controller.fields.palletrack.MasterImgTitle">4 Beam Levels in diagram</p>
         </div>
@@ -126,7 +126,7 @@
               </div>
             </div>
             <div class="-img" data-ng-show="!controller.Model.UseSupport">
-              <img src="<?= asset('images/tab2-img01.png') ?>" alt="">
+              <img src="<?= asset('racks/images/tab2-img01.png') ?>" alt="">
             </div>
           </div>
           <div class="-item-tab-half col-md-6">
@@ -144,7 +144,7 @@
               </div>
             </div>
             <div class="-img d-none" data-ng-show="!controller.Model.UseWireDeck" style="">
-              <img src="<?= asset('images/tab2-img02.png') ?>" alt="">
+              <img src="<?= asset('racks/images/tab2-img02.png') ?>" alt="">
             </div>
           </div>
         </div>
@@ -157,7 +157,7 @@
         <!---->
         <div class="-img centered">
           <!---->
-          <img src="<?= asset('images/multiple.png') ?>" alt="" data-ng-if="controller.designTypes.multiple.Name === controller._design">
+          <img src="<?= asset('racks/images/multiple.png') ?>" alt="" data-ng-if="controller.designTypes.multiple.Name === controller._design">
           <!---->
           <!---->
           <!---->

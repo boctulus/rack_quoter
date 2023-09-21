@@ -8,6 +8,6 @@
 
 return [
     // rutas 
-    'POST:/mutawp/api/install' => 'boctulus\SW\controllers\AjaxController@install',
-    '/mutawp/api/redirection'  => 'boctulus\SW\controllers\AjaxController@redirection'
+    'GET:/api/drawing/preview' => 'boctulus\SW\controllers\DrawingController@preview',
+    #'/mutawp/api/redirection'  => 'boctulus\SW\controllers\AjaxController@redirection'
 ];

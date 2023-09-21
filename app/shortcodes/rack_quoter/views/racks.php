@@ -3,7 +3,6 @@
   $cfg  = include __DIR__ . '/../config/config.php';
 
   $dims = $cfg['dims'];
-
 ?>
 
 <div class="row">
@@ -183,7 +182,7 @@
 
       <div id="step-04" class="clearfix tab-pane text-center d-none">
         <div class="clearfix text-center">
-            <a href="http://warehouserack.com/" class="navbar-brand">
+            <a href="/" class="navbar-brand">
               <img src="<?= shortcode_asset(__DIR__ . '/img/WES-Logo.png') ?>" alt="logo" style="max-height: 45px;">
             </a>
             <h2 style="font-size: 40px">Pallet Rack Layout Drawing</h2><!---->
@@ -194,9 +193,9 @@
             <div class="row">
                 <div class="col-md-12 col-xs-12 text-center">
                     <div class="-content">
-                        <div class="main-img"><img
-                                data-ng-src="https://genie.warehouserack.com/api/drawing/preview/?ItemKey=96x36x96&amp;Condition=new&amp;Design=3&amp;Levels=2&amp;PlaceWidth=600&amp;PlaceLength=120&amp;Aisle=100&amp;ItemTypeKey=pallet-rack&amp;ItemGroupKey=&amp;UseWireDecking=false&amp;UsePalletSupport=false&amp;maxheight=0"
-                                src="https://genie.warehouserack.com/api/drawing/preview/?ItemKey=96x36x96&amp;Condition=new&amp;Design=3&amp;Levels=2&amp;PlaceWidth=600&amp;PlaceLength=120&amp;Aisle=100&amp;ItemTypeKey=pallet-rack&amp;ItemGroupKey=&amp;UseWireDecking=false&amp;UsePalletSupport=false&amp;maxheight=0">
+                      
+                        <div class="main-img"><img                              
+                                src="/api/drawing/preview/?ItemKey=96x36x96&Condition=new&Design=3&Levels=2&PlaceWidth=600&PlaceLength=120&Aisle=100&ItemTypeKey=pallet-rack&ItemGroupKey=&UseWireDecking=false&UsePalletSupport=false&maxheight=0">
                         </div><!---->
                         <div><!---->
                             <p class="subheading">Redraw With Different Forklift</p><!---->

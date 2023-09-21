@@ -10,7 +10,17 @@ use boctulus\SW\core\libs\Strings;
 use boctulus\SW\core\libs\Arrays;
 
 class Url
-{
+{    
+    static function validate(string $url){
+        return filter_var($url, FILTER_VALIDATE_URL);
+    }
+
+    static function validateOrFail(string $url){
+        if (!filter_var($url, FILTER_VALIDATE_URL)){
+            throw new \InvalidArgumentException("URL '$url' is invalid");
+        }
+    }
+
     static function inArray(array $links, $link) {
         foreach ($links as $existingLink) {
             $existingLinkId = parse_url($existingLink, PHP_URL_QUERY);
@@ -30,7 +40,6 @@ class Url
 
         return filter_var($url, FILTER_VALIDATE_URL);
     }
-
     /*
         Obtiene la url final luego de redirecciones
 

@@ -18,9 +18,47 @@ class Files
 	const SLASHES 		  = ['/', '\\'];
 
 	/*
+		Chequea si una ruta existe
+	*/
+	static function exists(string $path){
+		if (strlen($path) > 4096){
+			return false;
+		}
+
+		return file_exists($path);
+	}
+
+	/*
+		Descarga localmente archivos dadas una o varias urls
+
+		$url 	   string|array url para descarga
+		$dest_path string       ubicacion donde se dejaran las descargas
+	*/
+	static function download($url, string $dest_dir){
+		if (is_string($url)){
+			$url = [ $url ];
+		}
+
+		$cli = new ApiClient();
+		$cli
+			->setBinary()
+			->withoutStrictSSL();
+
+		foreach ($url as $uri){	
+			Url::validateOrFail($uri);
+
+			$filename = static::getFilenameFromURL($uri);	
+			$bytes    = $cli->download($dest_dir . DIRECTORY_SEPARATOR . $filename, $uri);
+		}
+
+		// retorna la longitud del ultimo archivo descargado (util si es solo uno)
+		return $bytes;
+	}
+
+	/*
 		Fuerza la descarga del archivo
 	*/
-	static function download($file){
+	static function forceDownload($file){
 		if (!file_exists($file)) {
 			throw new \InvalidArgumentException("File not found for '$file'");
 		}
@@ -194,8 +232,29 @@ class Files
 		return $path;
 	}
 
-	// alias 
+	/**
+	 * Normaliza una ruta eliminando los segmentos ".." y convierte las barras diagonales a un formato específico si se especifica.
+	 *
+	 * @param string $path La ruta a normalizar.
+	 * @param string|null $to_slash (Opcional) El formato de barras diagonales al que se debe convertir la ruta (por ejemplo, '\\' para Windows).
+	 * @return string La ruta normalizada.
+	 */
 	static function normalize($path, $to_slash = null){
+		$path = str_replace('\\', '/', $path);
+
+		$segmentos = explode('/', $path);
+		$nuevaRuta = [];
+	
+		foreach ($segmentos as $segmento) {
+			if ($segmento === '..') {
+				array_pop($nuevaRuta);
+			} else {
+				$nuevaRuta[] = $segmento;
+			}
+		}
+	
+        $path = implode('/', $nuevaRuta);
+
 		return static::convertSlashes($path, $to_slash);
 	}
 
@@ -222,6 +281,30 @@ class Files
 
 		return false;
 	}
+
+	/*
+		Determina si una ruta comienza con root (\) tanto en Unix como Windows
+
+		A diferencia de isAbsolutePath() aca no importa si hay ".." en medio
+	*/
+	static function startsWithRoot(string $path){
+		if (PHP_OS_FAMILY === "Windows") {
+			if (preg_match('~[A-Z]:'.preg_quote('\\').'~i', $path)){
+				return true;
+			}
+
+			if (Strings::startsWith('\\', $path)){
+				return true;
+			}
+		}
+
+		if (Strings::startsWith(DIRECTORY_SEPARATOR, $path)){
+			return true;
+		}
+
+		return false;
+	}
+
 
 	/*
 		Returns absolute path relative to root path
@@ -864,6 +947,16 @@ class Files
 		static::delTree($dir, $include_self, true);
 	}
 
+	static function mkDir(string $dir, int $permissions = 0777, bool $recursive = true){
+		$ok = null;
+
+		if (!is_dir($dir)) {
+			$ok = @mkdir($dir, $permissions, $recursive);
+		}
+
+		return $ok;
+	}
+
 	// chatGPT alternative to delTree()
 	static function deleteDirectory(string $dir) {
 		if (!is_dir($dir)) {
@@ -882,17 +975,7 @@ class Files
 	
 		rmdir($dir);
 	}
-
-	static function mkDir(string $dir, int $permissions = 0777, bool $recursive = true){
-		$ok = null;
-
-		if (!is_dir($dir)) {
-			$ok = @mkdir($dir, $permissions, $recursive);
-		}
-
-		return $ok;
-	}
-
+	
 	static function mkDirOrFail(string $dir, int $permissions = 0777, $recursive = true, string $error = "Failed trying to create %s"){
 		$ok = null;
 
@@ -979,6 +1062,12 @@ class Files
 		} else {
 			// Verificar permisos de escritura en sistemas Unix (Linux, macOS, etc.)
 			return is_writable($file) && static::hasWritePermission(dirname($file));
+		}
+	}
+
+	static function isDirectoryWritableOrFail(string $directory){
+		if (!static::isDirectoryWritable($directory)){
+			throw new \Exception("$directory is not writable");
 		}
 	}
 
@@ -1116,9 +1205,25 @@ class Files
 		return static::file_get_contents_locking($filename, $flags);
 	}
 
-	/*
-		Lee archivo o falla.
-	*/
+	static function read(string $path, bool $use_include_path = false, $context = null, int $offset = 0, $length = null){
+		if (is_dir($path)){
+			$path = realpath($path);
+			throw new \InvalidArgumentException("$path is not a valid file. It's a directory!");
+		} 
+
+		if (!file_exists($path)){	
+			return false;
+		}
+
+		if ($length !== null){
+			$content = @file_get_contents($path, $use_include_path, $context, $offset, $length); // @
+		} else {
+			$content = @file_get_contents($path, $use_include_path, $context, $offset); // @
+		}
+		
+		return $content;
+	}
+
 	static function readOrFail(string $path, bool $use_include_path = false, $context = null, int $offset = 0, $length = null){
 		if (is_dir($path)){
 			$path = realpath($path);
@@ -1130,14 +1235,13 @@ class Files
 		}
 
 		if ($length !== null){
-			$content = @file_get_contents($path, $use_include_path, $context, $offset, $length);
+			$content = @file_get_contents($path, $use_include_path, $context, $offset, $length); // @
 		} else {
-			$content = @file_get_contents($path, $use_include_path, $context, $offset);
+			$content = @file_get_contents($path, $use_include_path, $context, $offset); // @
 		}
-
-		if ($content === false || $content === null){
-			$path = realpath($path);
-			throw new \Exception("File '$path' was unable to be written!");
+		
+		if (strlen($content) === false){
+			throw new \InvalidArgumentException("File '$path' can not be read");
 		}
 
 		return $content;
@@ -1145,6 +1249,11 @@ class Files
 
 	// alias
 	static function getContent(string $path, bool $use_include_path = false, $context = null, int $offset = 0, $length = null){
+		return static::read($path, $use_include_path, $context, $offset, $length);
+	}
+
+	// alias
+	static function getContentOrFail(string $path, bool $use_include_path = false, $context = null, int $offset = 0, $length = null){
 		return static::readOrFail($path, $use_include_path, $context, $offset, $length);
 	}
 
@@ -1174,7 +1283,88 @@ class Files
 	static function fileExtension(string $filename){
 		return Strings::last($filename, '.');
 	}
-}      
+
+	/*
+		Mueve archivos y directorios de un directorio a otro
+
+		Ej:
+
+		Files::move($ori, $dst, ['license.txt']);
+
+		Si el directorio destino no existe, se crea.
+
+		@param string $exclude entradas (a ser excluidas). Solo a primer nivel.
+
+		Ej:
+
+		Files::move("some-path/plugins", "someother-path/plugins", [ "__MACOSX" ])
+	*/
+	static function move(string $from, string $to, ?array $exclude = null) {
+		if (!is_dir($to)){
+			Files::mkDirOrFail($to);
+		} else {
+			Files::isDirectoryWritableOrFail($to);
+		}
+
+		if (is_dir($from)) {
+			if ($dh = opendir($from)) {
+				while (($file = readdir($dh)) !== false) {
+					if ($exclude !== null && in_array($file, $exclude)) {
+						continue;
+					}
+					
+					if ($file == "." || $file == "..") {
+						continue;
+					}
+					
+					$sourcePath      = $from . DIRECTORY_SEPARATOR . $file;
+					$destinationPath = $to   . DIRECTORY_SEPARATOR . $file;
+					
+					//dd("Intentando mover $sourcePath a $destinationPath");
+
+					if (!rename($sourcePath, $destinationPath)) {
+						throw new \Exception("Failed to move file: $sourcePath");
+					}
+				}
+				
+				closedir($dh);
+			}
+		}
+	}
+
+	/**
+	 * Check if a given URL extension matches the allowed extension(s).
+	 *
+	 * @param  string       $urlExtension The extension of the URL.
+	 * @param  string|array $allowedExtensions The allowed extension(s) to match against.
+	 * @return bool         Returns true if the URL extension matches any of the allowed extensions, false otherwise.
+	 */
+    static function matchExtension($urlExtension, $allowedExtensions) {
+        if (is_array($allowedExtensions)) {
+            return in_array($urlExtension, $allowedExtensions);
+        } else {
+            return $urlExtension === $allowedExtensions;
+        }
+    }
+
+	/*
+		Extrae el nombre de archivo de una url 
+		(que podria coincidir con el ultimo segmento)
+	*/
+	static function getFilenameFromURL(string $url){
+		return Strings::beforeIfContains(Strings::lastSegmentOrFail($url, '/'), '?');
+	}
+
+	/*
+		Devuelve la extension de un archivo
+		
+		Funciona con paths y tambien con urls del tipo "https://some-domain.com/css/fontawesome.css?v=1"
+	*/
+	static function getExtension(string $file){
+		return Strings::beforeIfContains(pathinfo($file, PATHINFO_EXTENSION), '?');
+	}
+}   
+    
 
 
 

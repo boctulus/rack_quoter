@@ -10,7 +10,7 @@ use boctulus\SW\core\libs\Templates;
 
 
 // Shortcodes
-require_once __DIR__ . '/shortcodes/rack_quoter_sc.php';
+require_once __DIR__ . '/app/shortcodes/rack_quoter/rack_quoter.php';
 
 
 function assets(){

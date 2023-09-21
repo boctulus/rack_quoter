@@ -1,0 +1,47 @@
+@charset "UTF-8";
+
+@font-face {
+    font-family: 'MontserratRegular';
+    src: url(../fonts/MontserratRegular.woff2) format("woff2")
+}
+
+@font-face {
+    font-family: 'MontserratBold';
+    src: url(../fonts/MontserratBold.woff2) format("woff2")
+}
+
+@font-face {
+    font-family: 'LatoItalic';
+    src: url(../fonts/LatoItalic.woff2) format("woff2")
+}
+
+@font-face {
+    font-family: 'LatoBlackItalic';
+    src: url(../fonts/LatoBlackItalic.woff2) format('woff2')
+}
+
+@font-face {
+    font-family: 'LatoLight';
+    src: url(../fonts/LatoLight.woff2) format('woff2')
+}
+
+@font-face {
+    font-family: 'MyraidProRegular';
+    src: url(../fonts/MyraidProRegular.woff2) format("woff2")
+}
+
+@font-face {
+    font-family: 'MyraidProSemibold';
+    src: url(../fonts/MyraidProSemibold.woff2) format("woff2")
+}
+
+@font-face {
+    font-family: 'MyraidProBold';
+    src: url(../fonts/MyraidProBold.woff2) format("woff2")
+}
+
+@font-face {
+    font-family: 'MyraidProSemiboldItalic';
+    src: url(../fonts/MyraidProSemiboldItalic.woff2) format("woff2")
+}
+

@@ -86,6 +86,9 @@ if (!defined('ETC_PATH'))
 if (!defined('VIEWS_PATH'))
     define('VIEWS_PATH', APP_PATH .  'views' . DIRECTORY_SEPARATOR);  
 
+if (!defined('SHORTCODES_PATH'))
+    define('SHORTCODES_PATH', APP_PATH .  'app'.DIRECTORY_SEPARATOR.  'shortcodes' . DIRECTORY_SEPARATOR); // <-- quitar el 'app'.DIRECTORY_SEPARATOR
+
 if (!defined('CONTROLLERS_PATH'))
     define('CONTROLLERS_PATH', APP_PATH . 'controllers' . DIRECTORY_SEPARATOR);    
 

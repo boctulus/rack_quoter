@@ -1,8 +1,9 @@
 <?php
 
-use boctulus\SW\core\libs\Strings;
+use boctulus\SW\core\libs\Url;
 use boctulus\SW\core\libs\Files;
 use boctulus\SW\core\libs\Plugins;
+use boctulus\SW\core\libs\Strings;
 
 function set_shortcode($tag){
     $tag     = str_replace([
@@ -41,16 +42,49 @@ function plugin_name(){
     return $plugin_name;
 }
 
-function assets_url(?string $resource = null){
+/*
+    Para ser usado dentro de un shortcode
+
+    Ej:
+
+    <img src="<?= shortcode_asset(__DIR__ . '/images/WES-Logo.png') ?>" />
+*/
+function shortcode_asset($resource)
+{   
+    $protocol = is_cli() ? 'http' : httpProtocol();
+    
+    $resource = Strings::substract($resource, SHORTCODES_PATH);
+    $resource = str_replace('\\', '/', $resource);
+    $resource = str_replace('/views/', '/assets/', $resource);
+    
+    $base     = config()['base_url'] ?? '';
+
+    if (Strings::endsWith('/', $base)){
+        $base = substr($base, 0, -1); 
+    }
+
+    $url  = $protocol . '://' . ($_SERVER['HTTP_HOST'] ?? env('APP_URL')) . '/wp-content/plugins/' . Plugins::currentName()  . '/app/shortcodes/';
+    $url .= $resource;
+
+    $url = Files::normalize($url, '/');
+
+    return $url;    
+}
+
+function assets_url(?string $resource = null){        
+    if (Files::isAbsolutePath($resource)){
+        $resource =  Strings::substract($resource, APP_PATH);
+    }
+
     $resource = str_replace('\\', '/', $resource);
     
     $url = plugin_url() . '/';    
 
-    if (!Strings::startsWith('assets/', $resource)){
-        $url .= 'assets/';
-    }
+    $url = $url . (!$resource === null ? '' : $resource);
 
-    return $url . (!$resource === null ? '' : $resource);
+    $url = Files::normalize($url, '/');
+
+    return $url;
 }
 
 function asset(string $resource){
@@ -60,6 +94,12 @@ function asset(string $resource){
 function css_file(string $src, $dependencies = [], $version = null, $media = 'all'){
 	$src    = ltrim($src, '/\\');
 	$handle = $src;
+
+    if (Files::isAbsolutePath($src)){
+        $src = Strings::substract($src, APP_PATH);
+    } else {
+        $src = 'assets/' . $src;
+    }
 
 	if (!Strings::startsWith('http', $src)){
 		$src = asset($src);
@@ -153,7 +193,13 @@ function get_view_src(string $filename){
         $filename .= '.php';
     }
 
-    return plugin_path() . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . $filename;
+    if (Files::isAbsolutePath($filename)){
+        $path = $filename;
+    } else {    
+        $path = plugin_path() . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . $filename;
+    }
+
+    return $path;
 }
 
 function get_view(string $view_path, ?Array $vars = null){

@@ -2,26 +2,15 @@
 
 use boctulus\SW\core\libs\Plugins;
 
-/*
-    Deberian solo encolarse en las paginas donde se invoca al shorcode
-*/
-
-// enqueue_admin(function(){
-//     css_file('...');
-//     js_file('...');
-// });
-
 enqueue(function(){
-    css_file('/third_party/fontawesome5/all.min.css');
-    js_file('/third_party/fontawesome5/fontawesome-5.js');
+    css_file('third_party/fontawesome5/all.min.css');
+    js_file('third_party/fontawesome5/fontawesome-5.js');
 
     css_file('third_party/bootstrap/3.x/bootstrap.min.css');
     css_file('third_party/bootstrap/3.x/normalize.css');
         
-    css_file('css/styles.css');
-
-    //css_file('/third_party/sweetalert2/sweetalert2.min.css'); 
-    //js_file('/third_party/sweetalert2/sweetalert.js'); 
+    css_file(SHORTCODES_PATH . 'rack_quoter/assets/css/racks.css');
+    css_file(SHORTCODES_PATH . 'rack_quoter/assets/css/styles.css');
 });
 
 // shortcode
@@ -49,13 +38,9 @@ function rack_quoter($args = [])
 
     ?>    
     
-    <!-- HTML -->
-    <div class="container">        
-        <?php view('racks\racks', [
-          // params
-        ])  ?>
-    </div>
-
+    <!-- HTML --> 
+    <?php view(SHORTCODES_PATH . 'rack_quoter/views/racks.php'); ?>
+ 
     <?php
 }
 

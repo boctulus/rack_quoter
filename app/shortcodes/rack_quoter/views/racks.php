@@ -291,10 +291,6 @@
 </div>
 
 <script>
-if (typeof $ == 'undefined') {
-  $ = jQuery;
-}
-
 let model = {}
 
 model.wireDecking    = false

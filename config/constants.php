@@ -33,9 +33,9 @@ if (!defined('LOGS_PATH'))
 if (!defined('VENDOR_PATH'))
     define('VENDOR_PATH', ROOT_PATH . 'vendor'. DIRECTORY_SEPARATOR); 
 
-// De momento es un "alias" de ROOT_PATH
+// Antes un "alias" de ROOT_PATH
 if (!defined('APP_PATH'))
-    define('APP_PATH', ROOT_PATH);
+    define('APP_PATH', ROOT_PATH . 'app' . DIRECTORY_SEPARATOR);
 
 if (!defined('BACKUP_PATH'))
 	define('BACKUP_PATH', ROOT_PATH  . 'backup' . DIRECTORY_SEPARATOR);
@@ -87,7 +87,7 @@ if (!defined('VIEWS_PATH'))
     define('VIEWS_PATH', APP_PATH .  'views' . DIRECTORY_SEPARATOR);  
 
 if (!defined('SHORTCODES_PATH'))
-    define('SHORTCODES_PATH', APP_PATH .  'app'.DIRECTORY_SEPARATOR.  'shortcodes' . DIRECTORY_SEPARATOR); // <-- quitar el 'app'.DIRECTORY_SEPARATOR
+    define('SHORTCODES_PATH', APP_PATH . 'shortcodes' . DIRECTORY_SEPARATOR); 
 
 if (!defined('CONTROLLERS_PATH'))
     define('CONTROLLERS_PATH', APP_PATH . 'controllers' . DIRECTORY_SEPARATOR);    

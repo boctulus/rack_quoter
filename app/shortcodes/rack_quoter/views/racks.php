@@ -3,6 +3,7 @@
   $cfg  = include __DIR__ . '/../config/config.php';
 
   $dims = $cfg['dims'];
+
 ?>
 
 <div class="row">
@@ -91,7 +92,7 @@
         </div>
         <div class="-item -img">
           <!---->
-          <img src="<?= shortcode_asset(__DIR__ . '/images/NewPalletRack.png') ?>">
+          <img src="<?= shortcode_asset(__DIR__ . '/img/NewPalletRack.png') ?>">
           <!---->
           <p class="-img-caption" >4 Beam Levels in diagram</p>
         </div>
@@ -116,7 +117,7 @@
               </div>
             </div>
             <div class="-img" >
-              <img src="<?= shortcode_asset(__DIR__ . '/images/tab2-img01.png') ?>">
+              <img src="<?= shortcode_asset(__DIR__ . '/img/tab2-img01.png') ?>">
             </div>
           </div>
 
@@ -136,7 +137,7 @@
               </div>
             </div>
             <div class="-img">
-              <img src="<?= shortcode_asset(__DIR__ . '/images/tab2-img02.png') ?>">
+              <img src="<?= shortcode_asset(__DIR__ . '/img/tab2-img02.png') ?>">
             </div>
           </div>
 
@@ -151,7 +152,7 @@
         <!---->
         <div class="-img centered">
           <!---->
-          <img src="<?= shortcode_asset(__DIR__ . '/images/multiple.png') ?>" >
+          <img src="<?= shortcode_asset(__DIR__ . '/img/multiple.png') ?>" >
           <!---->
           <!---->
           <!---->
@@ -180,16 +181,12 @@
         </form>
       </div>
 
-
       <div id="step-04" class="clearfix tab-pane text-center d-none">
-       
-
         <div class="clearfix text-center">
             <a href="http://warehouserack.com/" class="navbar-brand">
-              <img src="<?= shortcode_asset(__DIR__ . '/images/WES-Logo.png') ?>" alt="logo" style="max-height: 34px;">
+              <img src="<?= shortcode_asset(__DIR__ . '/img/WES-Logo.png') ?>" alt="logo" style="max-height: 45px;">
             </a>
-            <h2>
-                Pallet Rack Layout Drawing</h2><!---->
+            <h2 style="font-size: 40px">Pallet Rack Layout Drawing</h2><!---->
             <p id="palletsCount" class="subheading">
                 This Layout Will Store 36 Pallets</p><!---->
         </div>
@@ -203,9 +200,8 @@
                         </div><!---->
                         <div><!---->
                             <p class="subheading">Redraw With Different Forklift</p><!---->
-                            <div class="-content alignment"><span class="primary-description">Click Below to view your space
-                                    with
-                                    a different aisle dimension</span><!---->
+                            <div class="-content alignment" style="margin-top:-35px;"><span class="primary-description" style="font-style: italic;">Click Below to view your space
+                                    with a different aisle dimension</span><!---->
                                 <div aisle="controller.Model.Aisle">
                                     <div class="flex sb sm-c wrap aisle-wrapper">
                                         <div class="-item-inline">
@@ -213,7 +209,7 @@
                                                         type="radio" id="itemCheck-4" name="aisle" value="66"
                                                         class="ng-pristine "> <span>5' 6''
                                                         Aisle</span></label></div><!---->
-                                            <div class="-img"><img src="/assets/img/tab4-img04.png">
+                                            <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img04.png') ?>">
                                                 <h4>Drexel Forklift</h4>
                                             </div><!---->
                                         </div>
@@ -222,7 +218,7 @@
                                                         type="radio" id="itemCheck-3" name="aisle" value="78"
                                                         class="ng-pristine "> <span>6' 6''
                                                         Aisle</span></label></div><!---->
-                                            <div class="-img"><img src="/assets/img/tab4-img03.png">
+                                            <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img03.png') ?> ">
                                                 <h4>Bendi Forklift</h4>
                                             </div><!---->
                                         </div>
@@ -231,7 +227,7 @@
                                                         type="radio" id="itemCheck-2" name="aisle" value="114"
                                                         class="ng-pristine "> <span>9' 6''
                                                         Aisle</span></label></div><!---->
-                                            <div class="-img"><img src="/assets/img/tab4-img02.png">
+                                            <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img02.png') ?>">
                                                 <h4>Reach Truck</h4>
                                             </div><!---->
                                         </div>
@@ -240,7 +236,7 @@
                                                         type="radio" id="itemCheck-6" name="aisle" value="132"
                                                         class="ng-pristine "> <span>11'
                                                         Aisle</span></label></div><!---->
-                                            <div class="-img"><img src="/assets/img/tab5-img03.png">
+                                            <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img03.png') ?>">
                                                 <h4>3 wheel forklift</h4>
                                             </div><!---->
                                         </div>
@@ -249,7 +245,7 @@
                                                         type="radio" id="itemCheck-1" name="aisle" value="156"
                                                         class="ng-pristine "> <span>13'
                                                         Aisle</span></label></div><!---->
-                                            <div class="-img"><img src="/assets/img/tab4-img01.png">
+                                            <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img01.png') ?>">
                                                 <h4>4 wheel forklift</h4>
                                             </div><!---->
                                         </div>

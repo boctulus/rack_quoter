@@ -5,6 +5,8 @@ use boctulus\SW\core\libs\Files;
 
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
+
+    Core version: 1.5 (transitional)
 */
 
 ini_set('display_errors', 1);
@@ -15,7 +17,7 @@ if (defined('ROOT_PATH')){
     return;
 }
 
-require_once __DIR__   . '/core/helpers/env.php';
+require_once __DIR__   . '/app/core/helpers/env.php';
 require_once __DIR__   . '/config/constants.php';
 
 $cfg = require __DIR__ . '/config/config.php';
@@ -51,8 +53,8 @@ if ((php_sapi_name() === 'cli')){
 /* Helpers */
 
 $includes = [
-    __DIR__ . '/core/helpers', 
-    __DIR__ . '/helpers',
+    __DIR__ . '/app/core/helpers', 
+    __DIR__ . '/app/helpers',
     __DIR__ . '/boot'
 ];
 
@@ -88,7 +90,7 @@ foreach ($includes as $dir){
 
 DB::setPrimaryKeyName('ID');
     
-require_once __DIR__ . '/core/scripts/admin.php';
+require_once __DIR__ . '/app/core/scripts/admin.php';
 
 
 if (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY){

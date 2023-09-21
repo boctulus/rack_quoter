@@ -343,7 +343,7 @@ class Plugins
     static function currentName(){
         $path = static::path();
         $_pth = explode(DIRECTORY_SEPARATOR, $path);
-        $name = $_pth[count($_pth)-1];
+        $name = $_pth[count($_pth)-2];
  
         return $name;
     } 

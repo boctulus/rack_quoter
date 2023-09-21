@@ -93,8 +93,14 @@ DB::setPrimaryKeyName('ID');
 require_once __DIR__ . '/app/core/scripts/admin.php';
 
 
-if (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY){
-	error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-} else {
+if (WP_DEBUG === false){
+    error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
     ini_set('display_errors', 0);
+} else {
+    if (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY){
+        error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+    } else {
+        ini_set('display_errors', 0);
+    }
 }
+

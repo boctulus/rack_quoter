@@ -4,6 +4,9 @@ namespace boctulus\SW\controllers;
 
 use boctulus\SW\core\libs\Files;
 
+/*
+    API generadora de imagenes
+*/
 class DrawingController
 {
     function preview(){

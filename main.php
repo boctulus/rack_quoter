@@ -13,6 +13,14 @@ use boctulus\SW\core\libs\Templates;
 require_once __DIR__ . '/app/shortcodes/rack_quoter/rack_quoter.php';
 
 
+add_action('wp_footer', 'wpshout_action_example'); 
+function wpshout_action_example() { 
+    ?>
+        <img src="<?= asset('img/loading.gif') ?>">
+    <?php    
+}
+
+
 function assets(){
 	//css_file('/third_party/bootstrap/5.x/bootstrap.min.css');
     // js_file('/third_party/bootstrap/5.x/bootstrap.bundle.min.js');

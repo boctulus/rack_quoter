@@ -71,10 +71,14 @@ function shortcode_asset($resource)
     return $url;    
 }
 
-function assets_url(?string $resource = null){        
+function assets_url(?string $resource = null){    
     if (Files::isAbsolutePath($resource)){
-        $resource =  Strings::substract($resource, APP_PATH);
+        $resource =  Strings::substract($resource, ROOT_PATH);
+    } else {
+        $resource = 'assets/' . $resource;
     }
+
+    // dd($resource, 'RES');
 
     $resource = str_replace('\\', '/', $resource);
     
@@ -95,12 +99,6 @@ function css_file(string $src, $dependencies = [], $version = null, $media = 'al
 	$src    = ltrim($src, '/\\');
 	$handle = $src;
 
-    if (Files::isAbsolutePath($src)){
-        $src = Strings::substract($src, APP_PATH);
-    } else {
-        $src = 'assets/' . $src;
-    }
-
 	if (!Strings::startsWith('http', $src)){
 		$src = asset($src);
 	}
@@ -108,6 +106,10 @@ function css_file(string $src, $dependencies = [], $version = null, $media = 'al
     if ($version === null && !Strings::contains('third_party', $src)){
         $version = 'asset-' . Plugins::getVersion();
     }
+
+    // dd([
+    //     $handle, $src 
+    // ]);
     
 	wp_register_style($handle, $src, $dependencies, $version, $media);
 	wp_enqueue_style($handle);

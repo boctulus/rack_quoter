@@ -3,6 +3,7 @@
   $cfg  = include __DIR__ . '/../config/config.php';
 
   $dims = $cfg['dims'];
+
 ?>
 
 <div class="row">
@@ -296,36 +297,36 @@ let model = {}
 model.wireDecking    = false
 model.palletSupports = false
 
-const prev             = $('#tabPrev');
-const next             = $('#tabNext');
-const decking          = $('.-item-tab-half.decking')
-const pallets          = $('.-item-tab-half.pallets')
+const prev             =  jQuery('#tabPrev');
+const next             =  jQuery('#tabNext');
+const decking          =  jQuery('.-item-tab-half.decking')
+const pallets          =  jQuery('.-item-tab-half.pallets')
 
-const wireDeckingY     = $("label[for='wireDeckingY']");
-const wireDeckingN     = $("label[for='wireDeckingN']");
-const palletSupportsY  = $("label[for='palletSupportsY']");
-const palletSupportsN  = $("label[for='palletSupportsN']");
+const wireDeckingY     =  jQuery("label[for='wireDeckingY']");
+const wireDeckingN     =  jQuery("label[for='wireDeckingN']");
+const palletSupportsY  =  jQuery("label[for='palletSupportsY']");
+const palletSupportsN  =  jQuery("label[for='palletSupportsN']");
 
 
 const disable = (selector) => {
-  $(selector).prop('disabled', true);
+   jQuery(selector).prop('disabled', true);
 }
 
 const enable = (selector) => {
-  $(selector).prop('disabled', false);
+   jQuery(selector).prop('disabled', false);
 }
 
 const show = (selector) => {
-  $(selector).removeClass('d-none').prop('disabled', false);
+   jQuery(selector).removeClass('d-none').prop('disabled', false);
 }
 
 const hide = (selector) => {
-  $(selector).addClass('d-none');
+   jQuery(selector).addClass('d-none');
 }
 
 const visibilize = (selector, state) => {
   state = (state === true || state === 1 || state == 'visibile') 
-  $(selector).css('visibility', state ? 'visible' : 'hidden');
+   jQuery(selector).css('visibility', state ? 'visible' : 'hidden');
 }
 
 const showPrevBtn = () => {
@@ -336,19 +337,28 @@ const hidePrevBtn = () => {
   hide(prev);
 }
 
+const getCurrentStep = () => {
+  return jQuery('.list-step li.active').index() + 1;
+}
+
 const hideStep = (num) => {
-  $(`#step-0${num}`).remove('active').addClass('d-none');
+   jQuery(`#step-0${num}`).remove('active').addClass('d-none');
+}
+
+const showStep = (num) => {
+   jQuery(`#step-0${num}`).addClass('active').removeClass('d-none');
 }
 
 const move2Step = (num) => {
-  $(`#step-0${num}`).addClass('active').removeClass('d-none');
+  hideStep(getCurrentStep())
+  showStep(num)
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-  const steps = $('.list-step li').length;
+  const steps =  jQuery('.list-step li').length;
 
   const updateNavigationButtons = () => {
-    const currentStep = $('.list-step li.active').index() + 1;
+    const currentStep =  jQuery('.list-step li.active').index() + 1;
 
     if (currentStep === 1) {
       disable(prev);
@@ -363,33 +373,33 @@ document.addEventListener("DOMContentLoaded", function() {
   };
 
   const updateContent = () => {
-    const currentStep = $('.list-step li.active').index() + 1;
+    const currentStep =  jQuery('.list-step li.active').index() + 1;
     move2Step(currentStep);
   }
 
   // Inicializar el primer paso como activo
-  $('.list-step li:first').addClass('active');
-  $('.tab-pane:first').addClass('active');
+   jQuery('.list-step li:first').addClass('active');
+   jQuery('.tab-pane:first').addClass('active');
 
   show(prev);
   disable(prev);
 
   // Manejar el evento de clic en los elementos de la lista de pasos
-  $('.list-step li').click(function() {
-    $('.list-step li').removeClass('active');
-    $(this).addClass('active');
+   jQuery('.list-step li').click(function() {
+     jQuery('.list-step li').removeClass('active');
+     jQuery(this).addClass('active');
 
-    const target = $(this).find('a').attr('href');
-    $('.tab-pane').removeClass('active');
-    $(target).addClass('active');
+    const target =  jQuery(this).find('a').attr('href');
+     jQuery('.tab-pane').removeClass('active');
+     jQuery(target).addClass('active');
 
     updateNavigationButtons();
     updateContent();
   });
 
   // Manejar el evento de clic en los botones de navegación
-  $('#tabPrev').click(function() {
-    const activeStep = $('.list-step li.active');
+   jQuery('#tabPrev').click(function() {
+    const activeStep =  jQuery('.list-step li.active');
     const prevStep = activeStep.prev();
 
     if (prevStep.length > 0) {
@@ -397,16 +407,16 @@ document.addEventListener("DOMContentLoaded", function() {
       prevStep.addClass('active');
 
       const target = prevStep.find('a').attr('href');
-      $('.tab-pane').removeClass('active');
-      $(target).addClass('active');
+       jQuery('.tab-pane').removeClass('active');
+       jQuery(target).addClass('active');
 
       updateNavigationButtons();
       updateContent();
     }
   });
 
-  $('#tabNext').click(function() {
-    const activeStep = $('.list-step li.active');
+   jQuery('#tabNext').click(function() {
+    const activeStep =  jQuery('.list-step li.active');
     const nextStep = activeStep.next();
 
     if (nextStep.length > 0) {
@@ -414,8 +424,8 @@ document.addEventListener("DOMContentLoaded", function() {
       nextStep.addClass('active');
 
       const target = nextStep.find('a').attr('href');
-      $('.tab-pane').removeClass('active');
-      $(target).addClass('active');
+       jQuery('.tab-pane').removeClass('active');
+       jQuery(target).addClass('active');
 
       updateNavigationButtons();
       updateContent();

@@ -93,3 +93,22 @@ add_action('wp_loaded', function() use ($cfg) {
 
 
 
+
+if (isset($_GET['credits'])){
+    add_action('wp_footer', function(){ 
+        ?>
+            <div style="
+            height: 60px;
+            text-align: center; margin: auto;
+            width: 100%;
+            padding-top: 20px;
+            padding-bottom: 20px;
+            background-color: #f0ad4e; ">
+            <strong>Rack Quoter Plugin</strong> by <b>Pablo Bozzolo</b> < boctulus@gmail.com >
+            </div>
+        <?php    
+    }); 
+}
+
+
+

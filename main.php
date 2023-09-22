@@ -13,24 +13,6 @@ use boctulus\SW\core\libs\Templates;
 // Shortcodes
 require_once __DIR__ . '/app/shortcodes/rack_quoter/rack_quoter.php';
 
-
-if (isset($_GET['credits'])){
-    add_action('wp_footer', function(){ 
-        ?>
-            <div style="
-            height: 60px;
-            text-align: center; margin: auto;
-            width: 100%;
-            padding-top: 20px;
-            padding-bottom: 20px;
-            background-color: #f0ad4e; ">
-            <strong>Rack Quoter Plugin</strong> by <b>Pablo Bozzolo</b> < boctulus@gmail.com >
-            </div>
-        <?php    
-    }); 
-}
-
-
 function assets(){
 	//css_file('/third_party/bootstrap/5.x/bootstrap.min.css');
     // js_file('/third_party/bootstrap/5.x/bootstrap.bundle.min.js');

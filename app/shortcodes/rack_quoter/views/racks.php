@@ -188,7 +188,7 @@
             </a>
             <h2 style="font-size: 40px">Pallet Rack Layout Drawing</h2><!---->
             <p id="palletsCount" class="subheading">
-                This Layout Will Store 36 Pallets</p><!---->
+                This Layout Will Store {{N}} Pallets</p><!---->
         </div>
         <div class="clearfix">
             <div class="row">

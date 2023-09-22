@@ -256,8 +256,9 @@
                                                     class="check-default -l"><input type="radio" id="itemCheck-5"
                                                         name="aisle" data-ng-checked="customeAisle"> <span
                                                         class="h4">Enter a custom aisle
-                                                        dimension</span></label> <input type="text" class="form-control -small "
-                                                    style="margin: auto;" placeholder="inches"></div>
+                                                        dimension</span></label> 
+                                                        <input type="text" id="custom-aisle-dim" class="form-control -small" style="margin: auto; margin-top: 15px; display:none;" placeholder="inches">
+                                            </div>
                                         </div>
                                     </div>
                                 </div><!----><!---->
@@ -432,21 +433,15 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  /*  
-    model.wireDecking    = false
-    model.palletSupports = false
-
-    . Por defecto se muestra el tab de la izquierda por defecto y esta oculto el de la derecha
-    
-    . Por defecto wireDeckingY.find('input').prop('checked') == true 
-        y
-      palletSupportsY.find('input').prop('checked') == false
-
-    . Si se clickea wireDeckingY entonces se muestra el panel de la derecha y se oculta el de la izquierda.
-
-    . Si se clickea palletSupportsY entonces se muestra el panel de la izquierda y se oculta el de la derecha.
-
-  */
+  jQuery("input[name='aisle']").change(function() {
+      const el = jQuery(this)
+      
+      if (el.attr('id') == 'itemCheck-5'){
+        jQuery('#custom-aisle-dim').show()
+      } else {
+        jQuery('#custom-aisle-dim').hide()
+      }
+  });
 
   const wireDeckingHandler = () => {
     model.wireDecking = wireDeckingY.find('input').prop('checked')
@@ -462,7 +457,6 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 
 
-
   const palletsHandler = () => {
     model.palletSupports = palletSupportsY.find('input').prop('checked')
     visibilize(decking, !model.palletSupports)
@@ -476,6 +470,7 @@ document.addEventListener("DOMContentLoaded", function() {
     palletsHandler()
   });
   
+
 
   move2Step(4); ///////
 });

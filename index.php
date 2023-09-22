@@ -92,8 +92,6 @@ add_action('wp_loaded', function() use ($cfg) {
 });
 
 
-
-
 if (isset($_GET['credits'])){
     add_action('wp_footer', function(){ 
         ?>

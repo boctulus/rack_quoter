@@ -126,17 +126,18 @@ if (!defined('WIDGETS_PATH'))
 if (!defined('PUBLIC_PATH'))
     define('PUBLIC_PATH', ROOT_PATH . 'public' . DIRECTORY_SEPARATOR); 
 
+// En SR esta dentro de PUBLIC_PATH
 if (!defined('ASSETS_PATH'))
-    define('ASSETS_PATH', PUBLIC_PATH . 'assets' . DIRECTORY_SEPARATOR); 
+    define('ASSETS_PATH', ROOT_PATH . 'assets' . DIRECTORY_SEPARATOR); 
 
 if (!defined('IMAGES_PATH'))
-    define('IMAGES_PATH', PUBLIC_PATH . 'images' . DIRECTORY_SEPARATOR);     
+    define('IMAGES_PATH', ASSETS_PATH . 'img' . DIRECTORY_SEPARATOR);     
 
 if (!defined('CSS_PATH'))
-    define('CSS_PATH', PUBLIC_PATH . 'images' . DIRECTORY_SEPARATOR);   
+    define('CSS_PATH', ASSETS_PATH . 'css' . DIRECTORY_SEPARATOR);       
 
 if (!defined('JS_PATH'))
-    define('JS_PATH', PUBLIC_PATH . 'js' . DIRECTORY_SEPARATOR);       
+    define('JS_PATH', ASSETS_PATH . 'js' . DIRECTORY_SEPARATOR);         
 
 if (!defined('SCRIPTS_PATH'))
 	define('SCRIPTS_PATH', ROOT_PATH  . 'scripts' . DIRECTORY_SEPARATOR);

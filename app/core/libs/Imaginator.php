@@ -179,10 +179,8 @@ class Imaginator
     function text(int $x, int $y, $text, $color_name = null, $font = null, $size = 13, $angle = 0, $extra = []){
         if ($font === null){
             $font = 5;
-        }
-
-        if ($color_name == null){
-            $color_name = $this->getForegroundColorName();
+        } elseif (!is_numeric($font) && !($font instanceof \GdFont)){
+            Files::existsOrFail($font);
         }
 
         if ($color_name == null){

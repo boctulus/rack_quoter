@@ -9,5 +9,7 @@
 return [
     // rutas 
     'GET:/api/drawing/preview' => 'boctulus\SW\controllers\DrawingController@render_rack_array',
-    #'/mutawp/api/redirection'  => 'boctulus\SW\controllers\AjaxController@redirection'
+    'GET:/api/drawing/debug'   => 'boctulus\SW\controllers\DrawingController@debug',
+    
+    #'/api/redirection'  => 'boctulus\SW\controllers\AjaxController@redirection'
 ];

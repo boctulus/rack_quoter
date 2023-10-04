@@ -28,6 +28,17 @@ class Files
 		return file_exists($path);
 	}
 
+	static function existsOrFail(string $path){
+		if (strlen($path) > 4096){
+			return false;
+		}
+
+		if (!file_exists($path)){
+			$path = static::convertSlashes($path);
+			throw new \Exception("File not found for '$path'");
+		}
+	}
+
 	/*
 		Descarga localmente archivos dadas una o varias urls
 

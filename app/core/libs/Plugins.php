@@ -4,6 +4,8 @@ namespace boctulus\SW\core\libs;
 
 /*
 	@author boctulus
+
+    Version 1.5
 */
 
 if ( ! function_exists( 'get_plugins' ) ) {
@@ -340,6 +342,7 @@ class Plugins
         return $path;
     } 
 
+    // adaptado a version 1.5 de SW
     static function currentName(){
         $path = static::path();
         $_pth = explode(DIRECTORY_SEPARATOR, $path);
@@ -356,5 +359,11 @@ class Plugins
         $path = is_null($plugin_name) ? ROOT_PATH : static::fullPath($plugin_name);
 
         return Plugins::getMeta($path)['Version'] ?? '0.0.1';
+    }
+
+    static function getTextDomain($plugin_name =  null){
+        $path = is_null($plugin_name) ? ROOT_PATH : static::fullPath($plugin_name);
+
+        return Plugins::getMeta($path)['Text Domain'] ?? '0.0.1';
     }
 }

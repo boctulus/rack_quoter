@@ -1,5 +1,9 @@
 <?php
 
+/*
+    Version 1.5
+*/
+
 // Directorio de la instalacion de WordPress
 if (!defined('WP_ROOT_PATH'))
     define('WP_ROOT_PATH', realpath(__DIR__ . '/../../../..').  DIRECTORY_SEPARATOR);

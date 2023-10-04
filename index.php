@@ -8,7 +8,12 @@ use boctulus\SW\core\libs\Files;
 	Plugin Name: Rack quoter
 	Description: Shortcode cotizador de racks
 	Version: 0.0.1
-	Author: Abilo Escalona & others
+	Domain Path:  /languages
+	Text Domain: rack_quoter
+
+	Code:
+
+	@author Pablo Bozzolo <boctulus@gmail.com>
 */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -39,21 +44,19 @@ db_errors(false);
 require_once __DIR__ . '/main.php';
 
 
-/**
- * Load text domain for translations (see "boctulus-quote-importer")
- *
- */
-add_action( 'plugins_loaded', function() {
-	global $l10n;
+/*
+	Cargo traducciones
+*/
 
-	$domain = pathinfo(__FILE__, PATHINFO_FILENAME);
-
-	if ( isset( $l10n[ $domain ] ) ) {
-		return;
-	}
-
-	load_plugin_textdomain( $domain, false, basename( dirname( __FILE__ ) ) . '/languages/' );
-} );
+if (is_cli()){
+	add_action( 'init', function() {
+		$domain = get_text_domain(); 
+		load_plugin_textdomain( $domain, false, basename( dirname( __FILE__ ) ) . "/languages/" );
+	} );
+} else {	
+	$domain = get_text_domain();
+	load_plugin_textdomain( $domain, false, basename( dirname( __FILE__ ) ) . "/languages/" );
+}
 
 
 /*

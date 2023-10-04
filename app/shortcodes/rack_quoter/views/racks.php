@@ -181,6 +181,10 @@
         </form>
       </div>
 
+      <?php
+        $params = "design=multiple-rows&condition=new&height=96&depth=42&beam_length=96&beam_levels=5&length=50&width=200&aisle=132&usesupport=false&usewiredeck=false";
+      ?>
+
       <div id="step-04" class="clearfix tab-pane text-center d-none">
         <div class="clearfix text-center">
             <a href="/" class="navbar-brand">
@@ -195,8 +199,8 @@
                 <div class="col-md-12 col-xs-12 text-center">
                     <div class="-content">
                       
-                        <div class="main-img"><img                              
-                                src="/api/drawing/preview/?ItemKey=96x36x96&Condition=new&Design=3&Levels=2&PlaceWidth=600&PlaceLength=120&Aisle=100&ItemTypeKey=pallet-rack&ItemGroupKey=&UseWireDecking=false&UsePalletSupport=false&maxheight=0">
+                        <div class="main-img">
+                          <img src="/api/drawing/preview/?<?= $params ?>">
                         </div><!---->
                         <div><!---->
                             <p class="subheading">Redraw With Different Forklift</p><!---->

@@ -9,7 +9,7 @@ enqueue(function(){
     css_file('third_party/bootstrap/3.x/bootstrap.min.css');
     css_file('third_party/bootstrap/3.x/normalize.css');
         
-    css_file(__DIR__ . '/assets/css/racks.css'); // <-- no estan cargando
+    css_file(__DIR__ . '/assets/css/racks.css'); 
     css_file(__DIR__ . '/assets/css/styles.css');
 });
 

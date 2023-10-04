@@ -5,6 +5,12 @@ use boctulus\SW\core\libs\Files;
 use boctulus\SW\core\libs\Plugins;
 use boctulus\SW\core\libs\Strings;
 
+/*
+    @author Pablo Bozzolo < boctulus@gmail.com >
+
+    Version: 1.5 (transitional)
+*/
+
 function set_shortcode($tag){
     $tag     = str_replace([
         '[', ']'

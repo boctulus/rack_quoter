@@ -23,6 +23,96 @@
         static $post_type   = 'post';
         static $cat_metakey = 'category';
 
+        static function create($title, $content, $status = 'publish', $post_type = null){
+            $status = $status ?? 'publish';
+    
+            $data = array(
+                'post_title'    => $title,
+                'post_content'  => $content,
+                'post_status'   => $status,  
+                'post_type'     => $post_type
+            );
+            
+            // Insertar el nuevo evento
+            $post_id = wp_insert_post($data);
+            
+            // Verificar si la inserción fue exitosa
+            if (is_wp_error($post_id)) {
+                Logger::logError("Error al crear CPT de tipo '$post_type'. Detalle: " . $post_id->get_error_message());
+            }
+    
+            return $post_id;
+        }
+
+        /*
+            Ej:
+
+            $site_url = 'xxx bla bla';
+
+            dd(Posts::exists([
+                '_site_url' => $site_url
+            ], [
+                'category' => 'active'
+            ], 'publish', 'wsevent'));
+
+        */
+        static function exists($metas = null, $taxonomy = null, $post_status = 'publish', $post_type = null) : bool {
+            $args = array(
+                'post_type'      => $post_type,
+                'post_status'    => $post_status,
+                'posts_per_page' => 1,
+            );
+        
+            if ($taxonomy !== null) {
+                $args['tax_query'] = array(
+                    'relation' => 'AND',
+                    array(
+                        'taxonomy' => key($taxonomy),
+                        'field'    => 'slug',
+                        'terms'    => current($taxonomy),
+                    ),
+                );
+            }
+        
+            if ($metas !== null && is_array($metas)) {
+                $meta_query = array('relation' => 'AND');
+        
+                foreach ($metas as $key => $value) {
+                    $meta_query[] = array(
+                        'key'       => $key,
+                        'value'     => $value,
+                        'compare'   => '=',
+                    );
+                    $meta_query[] = array(
+                        'key'       => $key,
+                        'value'     => $value,
+                        'compare'   => 'BINARY',
+                    );
+                }
+        
+                if (isset($args['meta_query'])) {
+                    $args['meta_query']['relation'] = 'AND';
+                    $args['meta_query'][] = $meta_query;
+                } else {
+                    $args['meta_query'] = $meta_query;
+                }
+            }
+        
+            $query = new \WP_Query($args);
+        
+            return $query->have_posts();
+        }
+    
+        static function setTaxonomy($pid, $category_name, $cat_slug){
+            wp_set_object_terms($pid, $category_name , $cat_slug);
+        }
+    
+        static function setCategory($pid, $category_name, $cat_slug = null){
+            $cat_slug = $cat_slug ?? static::$cat_metakey;
+    
+            wp_set_object_terms($pid, $category_name , $cat_slug);
+        }    
+
         static function getPostType($post_id) {
             // Obtener el objeto del post usando el ID
             $post = get_post($post_id);

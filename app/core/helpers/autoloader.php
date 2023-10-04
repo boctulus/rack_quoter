@@ -4,6 +4,8 @@ spl_autoload_register('wp_namespace_autoload');
 
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
+
+    Version 1.5
 */
 
 function wp_namespace_autoload( $class ) {

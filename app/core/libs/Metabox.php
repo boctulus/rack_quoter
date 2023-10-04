@@ -117,11 +117,19 @@ class Metabox
     /*
         Ej:
 
-        'My campo',
+        $mt = new Metabox( [
+            [
+                ['site_url', 'URL'],
+                ['site_ip',  'IP'],
+                ['site_name', 'Nombre'],  // <---- por alguna razon si el nombre contiene espacios falla al salvar
+            ]
+        ], 'wsevent');
 
-        [
-            'readonly' => 'readonly'
-        ]
+        $mt->setReadOnly([
+            'site_url',
+            'site_ip',
+            'site_name'
+        ]);
     */
     function setElementAtts($field, Array $atts){        
         $meta_key = $field;
@@ -162,42 +170,40 @@ class Metabox
         $screen = $screen ?? $this->screen;
         
         foreach ($this->meta_atts as $meta){
-            if (is_array($meta)){
-                $meta_id    = $meta[0];
-                $meta_title = $meta[1];
-            } else {
-                $meta_id    = $meta;
-                $meta_title = $meta;
+            if (!is_array($meta)){
+                $meta = [ $meta ];
             }
 
-            $atts = '';
-            if (isset($this->element_atts[$meta_id])){
-                foreach ($this->element_atts[$meta_id] as $at => $at_val){
-                    $atts .= "$at = '$at_val' ";
+            foreach ($meta as $meta_row){
+                $meta_id    = $meta_row[0];
+                $meta_title = $meta_row[1];
+
+                $atts = '';
+                if (isset($this->element_atts[$meta_id])){
+                    foreach ($this->element_atts[$meta_id] as $at => $at_val){
+                        $atts .= "$at = '$at_val' ";
+                    }
                 }
-            }
+
+                $meta_callback = function ( $post ) use ($meta_id, $meta_title, $atts) {
+                    // Add a nonce field so we can check for it later.
+                    wp_nonce_field( 'post_nonce', 'post_nonce' );
+                    
+                    $value = get_post_meta($post->ID, '_'.$meta_id, true);
+                    $value  = esc_attr($value);
             
-            // dd($this->element_atts[$meta_id] ?? '', $meta_id);
-            // exit;
-
-
-            $meta_callback = function ( $post ) use ($meta_id, $meta_title, $atts) {
-                // Add a nonce field so we can check for it later.
-                wp_nonce_field( 'post_nonce', 'post_nonce' );
-                
-                $value = get_post_meta($post->ID, '_'.$meta_id, true);
-                $value  = esc_attr($value);
+                    // Usar HTML helper idealmente
+                    echo "<textarea style=\"width:100%\" id=\"$meta_id\" name=\"$meta_title\" $atts>$value</textarea>";
+                };
         
-                // Usar HTML helper idealmente
-                echo "<textarea style=\"width:100%\" id=\"$meta_id\" name=\"$meta_title\" $atts>$value</textarea>";
-            };
-    
-            add_meta_box(
-                $meta_id,
-                $meta_title,
-                $meta_callback,
-                $screen
-            );    
+                add_meta_box(
+                    $meta_id,
+                    $meta_title,
+                    $meta_callback,
+                    $screen
+                );    
+            }
+           
         }
     }    
     
@@ -240,24 +246,25 @@ class Metabox
         /* OK, it's safe for us to save the data now. */
     
         foreach ($this->meta_atts as $meta){
-            if (is_array($meta)){
-                $meta_id    = $meta[0];
-                $meta_title = $meta[1];
-            } else {
-                $meta_id    = $meta;
-                $meta_title = $meta;
+            if (!is_array($meta)){
+                $meta = [ $meta ];
             }
 
-            if (isset( $_POST[$meta_title])) {
-                $data = sanitize_text_field( $_POST[$meta_title] );
-                //dd($data, $meta_id);
+            foreach ($meta as $meta_row){
+                $meta_id    = $meta_row[0];
+                $meta_title = $meta_row[1];
 
-                if (isset($this->callbacks[$meta_id])){
-                    $cb = $this->callbacks[$meta_id];
-                    $cb($pid, $meta_id, $data);
+                if (isset( $_POST[$meta_title])) {
+                    $data = sanitize_text_field( $_POST[$meta_title] );
+                    //dd($data, $meta_id);
+
+                    if (isset($this->callbacks[$meta_id])){
+                        $cb = $this->callbacks[$meta_id];
+                        $cb($pid, $meta_id, $data);
+                    }
+
+                    update_post_meta( $pid, "_{$meta_id}", $data ); 
                 }
-
-                update_post_meta( $pid, "_{$meta_id}", $data ); 
             }
         }    
     }

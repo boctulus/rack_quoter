@@ -6,7 +6,7 @@ use boctulus\SW\core\libs\Files;
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
 
-    Core version: 1.5 (transitional)
+    Version: 1.5 (transitional)
 */
 
 ini_set('display_errors', 1);

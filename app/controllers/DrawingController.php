@@ -3,9 +3,10 @@
 namespace boctulus\SW\controllers;
 
 use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\libs\Logger;
+use boctulus\SW\core\libs\StdOut;
 use boctulus\SW\core\libs\Imaginator;
 use boctulus\SW\core\libs\Messurements as M;
-use boctulus\SW\core\libs\StdOut;
 
 /*
     API generadora de imagenes
@@ -14,6 +15,8 @@ class DrawingController
 {
     function __construct()
     {
+        _cors(); // helper
+
         if (isset($_GET['debug'])){
             Imaginator::disable();
         } else {
@@ -35,87 +38,98 @@ class DrawingController
         global $upright_height, $upright_depth, $beam_length, $beam_levels, $l_feets, $w_feets, $aisle, $len;
         global $w, $w_acc, $row_count, $boxes_per_row, $bl, $bl_with_margins;
 
-        // Step 1
-        $upright_height = (float) $_GET['height']; // inches
+        try {
+            // Step 1
+            $upright_height = (float) $_GET['height']; // inches
 
-        $upright_depth  = (float) $_GET['depth'];   // inches     
-        $beam_length    = (float) $_GET['beam_length'];   // inches * 
+            $upright_depth  = (float) $_GET['depth'];   // inches     
+            $beam_length    = (float) $_GET['beam_length'];   // inches * 
 
-        $beam_levels    = (int)   $_GET['beam_levels'] ?? 2;
+            $beam_levels    = (int)   $_GET['beam_levels'] ?? 2;
 
-        // Step 3
-        $l_feets        = (float) $_GET['length'];  // feet <-- length **
-        $w_feets        = (float) $_GET['width'];;  // feet
+            // Step 3
+            $l_feets        = (float) $_GET['length'];  // feet <-- length **
+            $w_feets        = (float) $_GET['width'];;  // feet
 
-        // Step 4
-        $aisle          = (float) $_GET['aisle']; // inches
-                
-        /*
-           Calculo
-        */
+            // Step 4
+            $aisle          = (float) $_GET['aisle']; // inches
+                    
+            /*
+                Calculo
+            */
 
-        $len                  = M::toInches($l_feets);  // inches
-        $w                    = M::toInches($w_feets);  // inches
+            $len                  = M::toInches($l_feets);  // inches
+            $w                    = M::toInches($w_feets);  // inches
 
-        // StdOut::pprint($l - $upright_depth, "Max");
+            // StdOut::pprint($l - $upright_depth, "Max");
 
-        // Calculo    
+            // Calculo    
 
-        $w_acc = $upright_depth;
+            $w_acc = $upright_depth;
 
-        // StdOut::pprint($w_acc, 'w acc');
+            // StdOut::pprint($w_acc, 'w acc');
 
-        // 42 + 60 + 2*42 + 60 + 2*42 + 60 + 2*42 + 60 + 42
+            // 42 + 60 + 2*42 + 60 + 2*42 + 60 + 2*42 + 60 + 42
 
-        $row_count = 1;
-        while ($row_count<999999 && $w_acc < $w - $upright_depth - $aisle) {
-            $w_acc += $aisle + ($upright_depth * 2);
-            $row_count += 1;
+            $row_count = 1;
+            while ($row_count<999999 && $w_acc < $w - $upright_depth - $aisle) {
+                $w_acc += $aisle + ($upright_depth * 2);
+                $row_count += 1;
 
-            // // StdOut::pprint("+= $aisle + ($upright_depth * 2)");
-            // // StdOut::pprint($w_acc, 'w acc');
-            // // StdOut::pprint($row_count, 'row count');
-        }
-    
-        if ($w_acc < $w && $w_acc + $aisle + $upright_depth < $w){
-            $w_acc += $aisle + $upright_depth;
-            $row_count++;
-        }
+                // // StdOut::pprint("+= $aisle + ($upright_depth * 2)");
+                // // StdOut::pprint($w_acc, 'w acc');
+                // // StdOut::pprint($row_count, 'row count');
+            }
+        
+            if ($w_acc < $w && $w_acc + $aisle + $upright_depth < $w){
+                $w_acc += $aisle + $upright_depth;
+                $row_count++;
+            }
 
-        StdOut::pprint(M::toFeetAndInches($w_acc), 'w acc');
-        // StdOut::pprint("$row_count : row count");
+            StdOut::pprint(M::toFeetAndInches($w_acc), 'w acc');
+            // StdOut::pprint("$row_count : row count");
 
-        //  StdOut::pprint($h_feets, 'h');
-        //  StdOut::pprint($aisle, 'aisle');
-        //  StdOut::pprint$boxes_per_row, 'boxes per row'
+            //  StdOut::pprint($h_feets, 'h');
+            //  StdOut::pprint($aisle, 'aisle');
+            //  StdOut::pprint$boxes_per_row, 'boxes per row'
 
-        $boxes_per_row  = floor($len / $beam_length);
+            $boxes_per_row  = floor($len / $beam_length);
 
-        $bl              = ($beam_length * $boxes_per_row);
-        $bl_with_margins = (int) ($bl * 1.038);  // <------------- factor de correccion
+            $bl              = ($beam_length * $boxes_per_row);
+            $bl_with_margins = (int) ($bl * 1.038);  // <------------- factor de correccion
 
-        if ($bl_with_margins > $len){
-            $boxes_per_row--;
-        }
+            if ($bl_with_margins > $len){
+                $boxes_per_row--;
+            }
 
-        $pallets = ($row_count -1) * $boxes_per_row * 12;
+            $pallets = ($row_count -1) * $boxes_per_row * 12;
 
-        switch ($beam_levels){
-            case 3:
-                $pallets = round( $pallets * 4/3);
-                break;
-            case 4:
-                $pallets = round( $pallets * 5/3);
-                break;
-            case 5:
-                $pallets = round( $pallets * 2);
-                break;
-            case 6:
-                $pallets = round( $pallets * 7/3);
-                break;
-        }   
+            switch ($beam_levels){
+                case 3:
+                    $pallets = round( $pallets * 4/3);
+                    break;
+                case 4:
+                    $pallets = round( $pallets * 5/3);
+                    break;
+                case 5:
+                    $pallets = round( $pallets * 2);
+                    break;
+                case 6:
+                    $pallets = round( $pallets * 7/3);
+                    break;
+            }   
 
-        return $pallets;
+            $data = [
+               'pallets' => $pallets
+            ];
+
+            return response()
+            ->sendJson($data);
+
+        } catch (\Exception $ex){
+            response()->error($ex->getMessage(), $ex->getCode());
+            Logger::logError($ex->getMessage());
+        }             
     }
 
     function render_rack_array()
@@ -138,7 +152,7 @@ class DrawingController
         $color_inv = true;
 
         // Definir dimensiones y colores
-        $ancho = 600;
+        $ancho = 800; // $_GET['img_w']
         $alto  = 600; // antes 1280
 
         $colors = [ 

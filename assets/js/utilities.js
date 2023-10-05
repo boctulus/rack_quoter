@@ -6,6 +6,10 @@ if (typeof $ == 'undefined' && typeof jQuery != 'undefined'){
     $=jQuery
 }
 
+const baseURL = () => {
+    return window.location.origin;
+} 
+
 /*
     onReady(event => {
         // Código que se ejecutará cuando el evento DOMContentLoaded ocurra

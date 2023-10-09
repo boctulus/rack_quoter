@@ -149,7 +149,12 @@ class DrawingController
 
         $this->calc_pallets();
 
-        $color_inv = true;
+        if (isset($_GET['inv_color']) && $_GET['inv_color'] == 1 || $_GET['inv_color'] === 'true'){
+            $color_inv = true;
+        } else {
+            $color_inv = env('INV_COLOR', "0");
+            $color_inv = ($color_inv == '1' || $color_inv == 'true');
+        }
 
         // Definir dimensiones y colores
         $ancho = 800; // $_GET['img_w']

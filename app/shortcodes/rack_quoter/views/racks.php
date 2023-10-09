@@ -23,9 +23,88 @@ $dims = $cfg['dims'];
     icon: "warning", // "warning", "error", "success" and "info"
   }
 
+  let completed_step = null;
   let pallet_qty;
 
   let params = 'design=multiple-rows&condition=new&height=96&depth=42&beam_length=96&beam_levels=2&length=50&width=200&aisle=132&usesupport=false&usewiredeck=false';
+
+
+  const getParams = () => {
+    let beam_levels    = null;
+    let wireDecking    = null;
+    let palletSupports = null;
+    let length         = null;
+    let width          = null;
+    let aisle          = null;
+
+    jQuery("input[type='radio'][name='selected-level']").each((ix, obj) => {  
+        const el      = jQuery(obj)
+        const level   = el.data('level'); 
+        const checked = el.prop('checked'); 
+
+        if (checked){
+          beam_levels = level;
+        }
+
+        //console.log(level, checked)
+    });
+
+    jQuery("input[type='radio'][name='wireDecking']").each((ix, obj) => {  
+        const el      = jQuery(obj); 
+        const checked = el.prop('checked'); 
+
+        if (checked){
+          wireDecking = (ix === 0);
+        }
+
+        //console.log(ix, checked)
+    });
+
+    jQuery("input[type='radio'][name='palletSupports']").each((ix, obj) => {  
+        const el      = jQuery(obj); 
+        const checked = el.prop('checked'); 
+
+        if (checked){
+          palletSupports = (ix === 0);
+        }
+
+        //console.log(ix, checked)
+    });
+
+    length = jQuery('input#length').val();
+    width  = jQuery('input#width').val();
+
+    aisle = jQuery('input#custom-aisle-dim').val();
+
+    if (aisle == ''){
+      jQuery("input[type='radio'][name='aisle']").each((ix, obj) => {  
+          const el      = jQuery(obj)
+          const value   = el.data('value'); 
+          const checked = el.prop('checked'); 
+
+          if (checked){
+            aisle = value;
+          }
+
+          //console.log(level, checked)
+      });
+    }   
+
+    return {
+      beam_levels,
+      wireDecking,
+      palletSupports,
+      length,
+      width,
+      aisle
+    };
+  }
+
+  // Limpio valor de aisle si selecciona de la lista
+  jQuery("input[type='radio'][name='aisle']").click(()=>{
+    jQuery('input#custom-aisle-dim').val('')
+  });
+
 
   const getImageWidth = () => {
     return document.querySelector('.main-img').offsetWidth;
@@ -143,7 +222,7 @@ $dims = $cfg['dims'];
                 <?php foreach (range(2, $dims['max_levels']) as $level) : ?>
                   <!---->
                   <label class="check-default line">
-                    <input type="radio" name="selected-level" value="<?= $level ?>" class="ng-pristine ">
+                    <input type="radio" name="selected-level" data-level="<?= $level ?>" class="ng-pristine ">
                     <span><?= $level ?></span>
                   </label>
                   <!---->
@@ -224,7 +303,7 @@ $dims = $cfg['dims'];
             <div class="form-inline">
               <div class="form-group -custom validation-group">
                 <label for="length" class="-primary">Length</label>
-                <input type="text" id="length" name="length" class="form-control ng-valid-maxlength ng-valid-required" valid-number="" placeholder="feet">
+                <input type="number" id="length" name="length" class="form-control ng-valid-maxlength ng-valid-required" valid-number="" placeholder="feet">
                 <div class="text-right ">
                   <!---->
                 </div>
@@ -232,7 +311,7 @@ $dims = $cfg['dims'];
               <!---->
               <div class="form-group -custom validation-group">
                 <label for="width" class="-secondary">Width</label>
-                <input type="text" id="width" name="width" class="form-control ng-valid-maxlength ng-valid-required" valid-number="" placeholder="feet">
+                <input type="number" id="width" name="width" class="form-control ng-valid-maxlength ng-valid-required" valid-number="" placeholder="feet">
                 <div class="text-right ">
                   <!---->
                 </div>
@@ -267,35 +346,35 @@ $dims = $cfg['dims'];
                     <div aisle="controller.Model.Aisle">
                       <div class="flex sb sm-c wrap aisle-wrapper">
                         <div class="-item-inline">
-                          <div class="-caption"><label for="itemCheck-4" class="check-default -l"><input type="radio" id="itemCheck-4" name="aisle" value="66" class="ng-pristine "> <span>5' 6''
+                          <div class="-caption"><label for="itemCheck-4" class="check-default -l"><input type="radio" id="itemCheck-4" name="aisle" data-value="66" class="ng-pristine" checked="checked"> <span>5' 6''
                                 Aisle</span></label></div><!---->
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img04.png') ?>">
                             <h4>Drexel Forklift</h4>
                           </div><!---->
                         </div>
                         <div class="-item-inline">
-                          <div class="-caption"><label for="itemCheck-3" class="check-default -l"><input type="radio" id="itemCheck-3" name="aisle" value="78" class="ng-pristine "> <span>6' 6''
+                          <div class="-caption"><label for="itemCheck-3" class="check-default -l"><input type="radio" id="itemCheck-3" name="aisle" data-value="78" class="ng-pristine "> <span>6' 6''
                                 Aisle</span></label></div><!---->
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img03.png') ?> ">
                             <h4>Bendi Forklift</h4>
                           </div><!---->
                         </div>
                         <div class="-item-inline">
-                          <div class="-caption"><label for="itemCheck-2" class="check-default -l"><input type="radio" id="itemCheck-2" name="aisle" value="114" class="ng-pristine "> <span>9' 6''
+                          <div class="-caption"><label for="itemCheck-2" class="check-default -l"><input type="radio" id="itemCheck-2" name="aisle" data-value="114" class="ng-pristine "> <span>9' 6''
                                 Aisle</span></label></div><!---->
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img02.png') ?>">
                             <h4>Reach Truck</h4>
                           </div><!---->
                         </div>
                         <div class="-item-inline">
-                          <div class="-caption"><label for="itemCheck-6" class="check-default -l"><input type="radio" id="itemCheck-6" name="aisle" value="132" class="ng-pristine "> <span>11'
+                          <div class="-caption"><label for="itemCheck-6" class="check-default -l"><input type="radio" id="itemCheck-6" name="aisle" data-value="132" class="ng-pristine "> <span>11'
                                 Aisle</span></label></div><!---->
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img03.png') ?>">
                             <h4>3 wheel forklift</h4>
                           </div><!---->
                         </div>
                         <div class="-item-inline">
-                          <div class="-caption"><label for="itemCheck-1" class="check-default -l"><input type="radio" id="itemCheck-1" name="aisle" value="156" checked="checked" class="ng-pristine "> <span>13'
+                          <div class="-caption"><label for="itemCheck-1" class="check-default -l"><input type="radio" id="itemCheck-1" name="aisle" data-value="156" class="ng-pristine "> <span>13'
                                 Aisle</span></label></div><!---->
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img01.png') ?>">
                             <h4>4 wheel forklift</h4>
@@ -306,7 +385,7 @@ $dims = $cfg['dims'];
                         <div class="-item-inline">
                           <div class="form-group text-center"><label for="itemCheck-5" class="check-default -l"><input type="radio" id="itemCheck-5" name="aisle" data-ng-checked="customeAisle"> <span class="h4">Enter a custom aisle
                                 dimension</span></label>
-                            <input type="text" id="custom-aisle-dim" class="form-control -small" style="margin: auto; margin-top: 15px; display:none;" placeholder="inches">
+                            <input type="number" id="custom-aisle-dim" class="form-control -small" style="margin: auto; margin-top: 15px; display:none;" placeholder="inches">
                           </div>
                         </div>
                       </div>
@@ -533,6 +612,6 @@ $dims = $cfg['dims'];
 
 
 
-    move2Step(4); ///////
+    // move2Step(4); ///////
   });
 </script>

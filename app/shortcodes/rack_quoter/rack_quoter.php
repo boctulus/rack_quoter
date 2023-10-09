@@ -1,5 +1,7 @@
 <?php
 
+// SHORTCODE
+
 use boctulus\SW\core\libs\Plugins;
 
 enqueue(function(){
@@ -11,6 +13,8 @@ enqueue(function(){
         
     css_file(__DIR__ . '/assets/css/racks.css'); 
     css_file(__DIR__ . '/assets/css/styles.css');
+
+    js_file('js/url.js');
 });
 
 // shortcode

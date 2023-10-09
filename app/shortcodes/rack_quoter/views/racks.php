@@ -32,12 +32,19 @@ $dims = $cfg['dims'];
   const getParams = () => {
     let design         = 'multiple-rows';
     let condition      = 'new';
+    let height         = null;
+    let depth          = null;
+    let beam_length    = null;
     let beam_levels    = null;
     let wireDecking    = null;
     let palletSupports = null;
     let length         = null;
     let width          = null;
     let aisle          = null;
+
+    height      = jQuery('#sel-height').val();
+    depth       = jQuery('#sel-depth').val();
+    beam_length = jQuery('#sel-beam_length').val();
 
     jQuery("input[type='radio'][name='selected-level']").each((ix, obj) => {  
         const el      = jQuery(obj)
@@ -93,6 +100,9 @@ $dims = $cfg['dims'];
     }   
 
     return {
+      height,
+      depth,
+      beam_length,
       beam_levels,
       wireDecking,
       palletSupports,
@@ -181,7 +191,7 @@ $dims = $cfg['dims'];
             <label class="control-label col-sm-4">
               <span>Upright Height</span>: </label>
             <div class="col-sm-8 select-wrapper -secondary">
-              <select class="form-control ">
+              <select id="sel-height" class="form-control">
                 <?php foreach ($dims['h'] as $e) : ?>
                   <option label="<?= $e ?>&quot;" value="<?= $e ?>"><?= $e ?>"</option>
                 <?php endforeach; ?>
@@ -193,7 +203,7 @@ $dims = $cfg['dims'];
             <label class="control-label col-sm-4">
               <span>Upright Depth</span>: </label>
             <div class="col-sm-8 select-wrapper -secondary">
-              <select class="form-control ">
+              <select id="sel-depth" class="form-control ">
                 <?php foreach ($dims['d'] as $e) : ?>
                   <option label="<?= $e ?>&quot;" value="<?= $e ?>"><?= $e ?>"</option>
                 <?php endforeach; ?>
@@ -205,7 +215,7 @@ $dims = $cfg['dims'];
             <label class="control-label col-sm-4">
               <span>Beam Length</span>: </label>
             <div class="col-sm-8 select-wrapper">
-              <select class="form-control ">
+              <select id="sel-beam_length" class="form-control ">
                 <?php foreach ($dims['l'] as $e) : ?>
                   <option label="<?= $e ?>&quot;" value="<?= $e ?>"><?= $e ?>" Long</option>
                 <?php endforeach; ?>

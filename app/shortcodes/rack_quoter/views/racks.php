@@ -30,6 +30,8 @@ $dims = $cfg['dims'];
 
 
   const getParams = () => {
+    let design         = 'multiple-rows';
+    let condition      = 'new';
     let beam_levels    = null;
     let wireDecking    = null;
     let palletSupports = null;

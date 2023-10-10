@@ -51,6 +51,13 @@ const getQueryString = (obj) => {
   return new URLSearchParams(sanitizedObj).toString();
 };
 
+/*
+    Valida que todos los valores de un objeto tengan valor distinto de null o cada vacia ("")
+*/
+const nonEmptyValues = (obj) => {
+  return Object.values(obj).every(value => value !== null && value !== "");
+};
+
 
 /*
   History API
@@ -91,8 +98,6 @@ const setQueryParamsIntoHistoryAPI = (params, state = {}, push_or_replace = 'pus
   A diferencia de setQueryParamsIntoHistoryAPI(), esta funcion mantendra cualquier query param existente.
 */
 const mergeQueryParamsIntoHistoryAPI = (params, state = {}, push_or_replace = 'push') => {
-  console.log('params', params);
-
   if (push_or_replace !== 'push' && push_or_replace !== 'replace') {
     throw "Invalid parameter";
   }

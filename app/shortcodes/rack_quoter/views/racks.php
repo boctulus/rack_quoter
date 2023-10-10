@@ -524,12 +524,17 @@ $dims = $cfg['dims'];
 
     const updateNavigationButtons = () => {
       const current_step = jQuery('.list-step li.active').index() + 1;
+      const prev_step    = current_step;
+
+      if (nonEmptyValues(getParams()) === false){
+          return;
+      }
 
       if (current_step === 1) {
         disable(prev);
         show(next);
       } else if (current_step < steps) {
-        show(prev);
+        show(prev); // ??
         show(next);
       } else {
         show(prev);
@@ -541,7 +546,7 @@ $dims = $cfg['dims'];
       })
 
       if (current_step === 4) {
-        const params = getParams(true);
+        params = getParams(true);
 
         updateImage(params);
 

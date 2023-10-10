@@ -123,8 +123,12 @@ class Router
 				// De momento, nada por aqui
 				$args = [];
 				
-				$data = call_user_func_array([$controller_obj, $method], $args);
-				echo $data; 
+				try {
+					$data = call_user_func_array([$controller_obj, $method], $args);
+					echo $data; 
+				} catch (\Throwable $e) {
+					Logger::logError($e->getMessage());
+				}
 
 				exit;
 			}

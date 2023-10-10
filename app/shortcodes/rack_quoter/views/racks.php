@@ -24,22 +24,85 @@ $dims = $cfg['dims'];
   }
 
   let state = {
-    completed_step: null,
-    aisle: null,
-    pallet_qty: null
-  };
+    aisle: 66,
+    usewiredeck: null,
+    usesupport: null,
+    height: null,
+    depth: null,
+    length: null,
+    width: null,
+    beam_length: null,
+    beam_levels: null,
 
+    /*
+      Propiedades computadas las inicializo en false
+    */
+
+    pallet_qty: false,
+    completed_step: false,
+  }; 
+
+  const updateState = (new_state) => {
+    for (const key in new_state) {
+      if (new_state.hasOwnProperty(key)) {
+          state[key] = new_state[key];
+      }
+    }
+
+    calc_draw();
+
+    return state;
+  }
  
-  // let params = 'design=multiple-rows&condition=new&height=96&depth=42&beam_length=96&beam_levels=2&length=50&width=200&aisle=132&usesupport=false&usewiredeck=false';
+  const getParams = (as_string = false) => {
+    if (as_string){
+      return getQueryString(state);
+    } 
 
+    return state;
+  }
+
+  /*
+    Calc and draw 
+  */
+  const calc_draw = () => {
+    if (nonEmptyValues(getParams()) === false){
+      return;
+    }
+
+    params = getParams(true);
+
+    updateImage(params);
+
+    getPalletQty(endpoint_calc, params, verb, dataType, contentType)
+    .then(palletQty => {
+      jQuery('#lb_pallet_qty').text(palletQty)
+    })
+    .catch(error => {
+      console.error(error.message);
+    });
+  }
 
   document.addEventListener("DOMContentLoaded", function() {
+    height      = jQuery('#sel-height').val();
+    depth       = jQuery('#sel-depth').val();
+    beam_length = jQuery('#sel-beam_length').val();
+
+    updateState({
+      height,
+      depth,
+      beam_length
+    });
 
     document.querySelectorAll("input[type='radio'][name='selected-level']").forEach(function(el) {
         el.addEventListener('change', function() {
-            if (state.completed_step === null || state.completed_step == null || state.completed_step == '') {
-                state.completed_step = 1;
+            const level   = parseInt(el.dataset.level);
+
+            if (state.completed_step === false || state.completed_step == '') {
+                updateState({completed_step: 1});
             }
+
+            updateState({beam_levels: level});
 
             let params = getParams();
 
@@ -53,106 +116,52 @@ $dims = $cfg['dims'];
     document.getElementById('btn-set-aisle').addEventListener('click', function(e) {
       const aisle = document.querySelector('input#custom-aisle-dim').value;
 
-        if (aisle !== ''){
-            state.aisle = aisle;
-        }
+      if (aisle !== ''){
+        updateState({aisle});
+      }
     });
 
     document.querySelectorAll("input[type='radio'][name='aisle']").forEach(function(el) {
       el.addEventListener('click', function() {
-            const value = el.dataset.value;
-            const checked = el.checked;
+          const aisle   = el.dataset.value;
+          const checked = el.checked;
 
-            if (checked) {
-                state.aisle = value;
-            }
+          if (checked) {
+            updateState({aisle});
+          }
 
-            //console.log(level, checked)
         });
+    });
+
+    document.getElementById('sel-height').addEventListener('click', function(e) {
+      updateState({height: this.value});
+    });
+
+    document.getElementById('sel-depth').addEventListener('click', function(e) {
+      updateState({depth: this.value});
+    });
+
+    document.getElementById('sel-beam_length').addEventListener('click', function(e) {
+      updateState({beam_length: this.value});
+    });
+
+    document.getElementById('length').addEventListener('change', function(e) {
+      updateState({length: this.value});
+    });
+
+    document.getElementById('width').addEventListener('change', function(e) {
+      updateState({width: this.value});
     });
 
 
   });
 
-  
-  const getParams = (as_string = false) => {
-    let design = 'multiple-rows';
-    let condition = 'new';
-    let height = null;
-    let depth = null;
-    let beam_length = null;
-    let beam_levels = null;
-    let wireDecking = null;
-    let palletSupports = null;
-    let length = null;
-    let width = null;
-    let aisle = null;
 
-    height      = jQuery('#sel-height').val();
-    depth       = jQuery('#sel-depth').val();
-    beam_length = jQuery('#sel-beam_length').val();
-
-    jQuery("input[type='radio'][name='selected-level']").each((ix, obj) => {
-      const el = jQuery(obj)
-      const level = el.data('level');
-      const checked = el.prop('checked');
-
-      if (checked) {
-        beam_levels = level;
-      }
-
-      //console.log(level, checked)
-    });
-
-    jQuery("input[type='radio'][name='wireDecking']").each((ix, obj) => {
-      const el = jQuery(obj);
-      const checked = el.prop('checked');
-
-      if (checked) {
-        wireDecking = (ix === 0);
-      }
-
-      //console.log(ix, checked)
-    });
-
-    jQuery("input[type='radio'][name='palletSupports']").each((ix, obj) => {
-      const el = jQuery(obj);
-      const checked = el.prop('checked');
-
-      if (checked) {
-        palletSupports = (ix === 0);
-      }
-
-      //console.log(ix, checked)
-    });
-
-    length = jQuery('input#length').val();
-    width = jQuery('input#width').val();
-
-    params = {
-      height,
-      depth,
-      beam_length,
-      beam_levels,
-      length,
-      width,
-      aisle : state.aisle,
-      usesupport  : palletSupports,
-      usewiredeck : wireDecking,
-    };
-
-    if (as_string){
-      return getQueryString(params);
-    } 
-
-    return params;
-  }
 
   // Limpio valor de aisle si selecciona de la lista
   jQuery("input[type='radio'][name='aisle']").click(() => {
     jQuery('input#custom-aisle-dim').val('')
   });
-
 
   const getImageWidth = () => {
     return document.querySelector('.main-img').offsetWidth;
@@ -168,6 +177,8 @@ $dims = $cfg['dims'];
 
   const getPalletQty = async (endpoint_calc, params, verb, dataType, contentType) => {
     const url = endpoint_calc + '?' + params;
+
+    console.log(url)
 
     try {
       const res = await jQuery.ajax({
@@ -185,13 +196,6 @@ $dims = $cfg['dims'];
     }
   };
 
-  // getPalletQty(endpoint_calc, params, verb, dataType, contentType)
-  // .then(palletQty => {
-  //     console.log('Cantidad de pallets:', palletQty);
-  // })
-  // .catch(error => {
-  //     console.error(error.message);
-  // });
 </script>
 
 
@@ -430,18 +434,21 @@ $dims = $cfg['dims'];
                         </div>
                       </div>
 
-                      <div class="clearfix aisle-wrapper">
-                        <div class="row -item-inline">
-                          <div class="form-group text-center"><label for="itemCheck-5" class="check-default -l"><input type="radio" id="itemCheck-5" name="aisle" data-ng-checked="customeAisle"> <span class="h4">Enter a custom aisle dimension</span></label>
-                          </div>
-
-                          <div class="input-group col-lg-2 col-md-2 col-sm-3 col-xs-4 text-center" style="margin: auto; margin-top: 15px; margin-bottom: 10px; display: none;">
-                            <input type="number" class="form-control" id="custom-aisle-dim" placeholder="inches" aria-label="inches">
-                            <span class="input-group-addon btn" id="btn-set-aisle">OK</span>
-                          </div>
-                          
+                  
+                      <div class="row -item-inline" style="margin-top:15px;">
+                        <div class="form-group text-center">
+                          <label for="itemCheck-5" class="check-default -l">
+                          <input type="radio" id="itemCheck-5" name="aisle" data-ng-checked="customeAisle"> 
+                          <span class="h4">Enter a custom aisle dimension</span></label>
                         </div>
+
+                        <div class="input-group col-lg-2 col-md-2 col-sm-3 col-xs-4 text-center" style="margin: auto; margin-top: 15px; margin-bottom: 10px; display: none;">
+                          <input type="number" class="form-control" id="custom-aisle-dim" placeholder="inches" aria-label="inches">
+                          <span class="input-group-addon btn" id="btn-set-aisle">OK</span>
+                        </div>
+                        
                       </div>
+                      
 
                     </div><!----><!---->
                   </div>
@@ -475,10 +482,6 @@ $dims = $cfg['dims'];
 </div>
 
 <script>
-  let model = {}
-
-  model.wireDecking = false
-  model.palletSupports = false
 
   const prev = jQuery('#tabPrev');
   const next = jQuery('#tabNext');
@@ -564,17 +567,7 @@ $dims = $cfg['dims'];
       })
 
       if (current_step === 4) {
-        params = getParams(true);
-
-        updateImage(params);
-
-        getPalletQty(endpoint_calc, params, verb, dataType, contentType)
-          .then(palletQty => {
-            jQuery('#lb_pallet_qty').text(palletQty)
-          })
-          .catch(error => {
-            console.error(error.message);
-          });
+        calc_draw();
       }
     };
 
@@ -649,8 +642,13 @@ $dims = $cfg['dims'];
     });
 
     const wireDeckingHandler = () => {
-      model.wireDecking = wireDeckingY.find('input').prop('checked')
-      visibilize(pallets, !model.wireDecking)
+      updateState({usewiredeck: wireDeckingY.find('input').prop('checked')});
+
+      if (state.usesupport === null){
+        updateState({usesupport: false});
+      }
+
+      visibilize(pallets, !state.usewiredeck)
     }
 
     wireDeckingY.find('input').change(function() {
@@ -661,10 +659,14 @@ $dims = $cfg['dims'];
       wireDeckingHandler()
     });
 
-
     const palletsHandler = () => {
-      model.palletSupports = palletSupportsY.find('input').prop('checked')
-      visibilize(decking, !model.palletSupports)
+      updateState({usesupport: palletSupportsY.find('input').prop('checked')});
+
+      if (state.usewiredeck === null){
+        updateState({usewiredeck: false});
+      }
+
+      visibilize(decking, !state.usesupport)
     }
 
     palletSupportsY.find('input').change(function() {

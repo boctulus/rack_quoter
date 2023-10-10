@@ -40,19 +40,19 @@ class DrawingController
 
         try {
             // Step 1
-            $upright_height = (float) $_GET['height']; // inches
+            $upright_height = (int) $_GET['height']; // inches
 
-            $upright_depth  = (float) $_GET['depth'];   // inches     
-            $beam_length    = (float) $_GET['beam_length'];   // inches * 
+            $upright_depth  = (int) $_GET['depth'];   // inches     
+            $beam_length    = (int) $_GET['beam_length'];   // inches * 
 
-            $beam_levels    = (int)   $_GET['beam_levels'] ?? 2;
+            $beam_levels    = (int) $_GET['beam_levels'] ?? 2;
 
             // Step 3
-            $l_feets        = (float) $_GET['length'];  // feet <-- length **
-            $w_feets        = (float) $_GET['width'];;  // feet
+            $l_feets        = (int) $_GET['length'];  // feet <-- length **
+            $w_feets        = (int) $_GET['width'];;  // feet
 
             // Step 4
-            $aisle          = (float) $_GET['aisle']; // inches
+            $aisle          = (int) $_GET['aisle']; // inches
                     
             /*
                 Calculo
@@ -170,7 +170,7 @@ class DrawingController
         $font_2 = ASSETS_PATH . 'fonts/Swiss721BT-Light.otf';
 
         if ($row_count > 5){
-            $alto *= intval($row_count/4.5); 
+            $alto *= intval($row_count/4); 
         }
 
         if ($boxes_per_row > 22){
@@ -241,7 +241,7 @@ class DrawingController
 
         $x_end = ($ancho - $margin_r) + $w;
         $x_ini = $x_end - ($boxes_per_row * $w);
-        $x_med = ($x_end + $x_ini) * 0.5;
+        $x_med = intval(($x_end + $x_ini) * 0.5);
 
         // duplas considerando que la primera linea y la ultima formarian otra
         $duos  = ($row_count-1);
@@ -250,7 +250,7 @@ class DrawingController
         $y_dif = ($duos * $h) + ($interline * ($row_count-1)) - 1   - ($row_count -2) * $h -$h;
 
         // Ancho total especificado (convertido a pixels) por el usuario como parametro
-        $y_usr = $y_dif * $w_feets / M::toFeet($w_acc);
+        $y_usr = intval($y_dif * $w_feets / M::toFeet($w_acc));
 
         // Middle line
         $im->line($x_med, $y, 0, $y_dif, null, true);

@@ -51,11 +51,9 @@ const getQueryString = (obj) => {
   return new URLSearchParams(sanitizedObj).toString();
 };
 
-/*
-    Valida que todos los valores de un objeto tengan valor distinto de null o cada vacia ("")
-*/
 const nonEmptyValues = (obj) => {
-  return Object.values(obj).every(value => value !== null && value !== "");
+  return Object.values(obj).every(value => value !== null && value !== "" && value !== undefined) &&
+         Object.keys(obj).every(key => obj[key] !== undefined);
 };
 
 

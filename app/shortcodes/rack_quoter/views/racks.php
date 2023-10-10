@@ -84,6 +84,8 @@ $dims = $cfg['dims'];
   }
 
   document.addEventListener("DOMContentLoaded", function() {
+   
+
     height      = jQuery('#sel-height').val();
     depth       = jQuery('#sel-depth').val();
     beam_length = jQuery('#sel-beam_length').val();
@@ -211,7 +213,7 @@ $dims = $cfg['dims'];
       </li>
       <!---->
       <li>
-        <a aria-controls="step-03">Space Availability</a>
+        <a aria-controls="step-03">Space Av.</a>
       </li>
       <!---->
       <!---->
@@ -273,7 +275,7 @@ $dims = $cfg['dims'];
               <div class="check-wrapper">
                 <?php foreach (range(2, $dims['max_levels']) as $level) : ?>
                   <!---->
-                  <label class="check-default line">
+                  <label class="check-default line" style="margin-right: 0px; margin-left: 3px;">
                     <input type="radio" name="selected-level" data-level="<?= $level ?>" class="ng-pristine ">
                     <span><?= $level ?></span>
                   </label>

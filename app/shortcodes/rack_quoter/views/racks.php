@@ -25,95 +25,119 @@ $dims = $cfg['dims'];
 
   let completed_step = null;
   let pallet_qty;
+  
+  // let params = 'design=multiple-rows&condition=new&height=96&depth=42&beam_length=96&beam_levels=2&length=50&width=200&aisle=132&usesupport=false&usewiredeck=false';
 
-  let params = 'design=multiple-rows&condition=new&height=96&depth=42&beam_length=96&beam_levels=2&length=50&width=200&aisle=132&usesupport=false&usewiredeck=false';
+
+  document.addEventListener("DOMContentLoaded", function() {
+
+    jQuery("input[type='radio'][name='selected-level']").change(() => {
+      if (completed_step === null || completed_step == '') {
+        completed_step = 1;
+      }
+
+      let params = getParams()
+
+      params.completed_step = completed_step;
+      params.current_step   = 1;
+
+      mergeQueryParamsIntoHistoryAPI(params)
+    });
+
+  });
 
 
-  const getParams = () => {
-    let design         = 'multiple-rows';
-    let condition      = 'new';
-    let height         = null;
-    let depth          = null;
-    let beam_length    = null;
-    let beam_levels    = null;
-    let wireDecking    = null;
+  const getParams = (as_string = false) => {
+    let design = 'multiple-rows';
+    let condition = 'new';
+    let height = null;
+    let depth = null;
+    let beam_length = null;
+    let beam_levels = null;
+    let wireDecking = null;
     let palletSupports = null;
-    let length         = null;
-    let width          = null;
-    let aisle          = null;
+    let length = null;
+    let width = null;
+    let aisle = null;
 
     height      = jQuery('#sel-height').val();
     depth       = jQuery('#sel-depth').val();
     beam_length = jQuery('#sel-beam_length').val();
 
-    jQuery("input[type='radio'][name='selected-level']").each((ix, obj) => {  
-        const el      = jQuery(obj)
-        const level   = el.data('level'); 
-        const checked = el.prop('checked'); 
+    jQuery("input[type='radio'][name='selected-level']").each((ix, obj) => {
+      const el = jQuery(obj)
+      const level = el.data('level');
+      const checked = el.prop('checked');
 
-        if (checked){
-          beam_levels = level;
-        }
+      if (checked) {
+        beam_levels = level;
+      }
 
-        //console.log(level, checked)
+      //console.log(level, checked)
     });
 
-    jQuery("input[type='radio'][name='wireDecking']").each((ix, obj) => {  
-        const el      = jQuery(obj); 
-        const checked = el.prop('checked'); 
+    jQuery("input[type='radio'][name='wireDecking']").each((ix, obj) => {
+      const el = jQuery(obj);
+      const checked = el.prop('checked');
 
-        if (checked){
-          wireDecking = (ix === 0);
-        }
+      if (checked) {
+        wireDecking = (ix === 0);
+      }
 
-        //console.log(ix, checked)
+      //console.log(ix, checked)
     });
 
-    jQuery("input[type='radio'][name='palletSupports']").each((ix, obj) => {  
-        const el      = jQuery(obj); 
-        const checked = el.prop('checked'); 
+    jQuery("input[type='radio'][name='palletSupports']").each((ix, obj) => {
+      const el = jQuery(obj);
+      const checked = el.prop('checked');
 
-        if (checked){
-          palletSupports = (ix === 0);
-        }
+      if (checked) {
+        palletSupports = (ix === 0);
+      }
 
-        //console.log(ix, checked)
+      //console.log(ix, checked)
     });
 
     length = jQuery('input#length').val();
-    width  = jQuery('input#width').val();
+    width = jQuery('input#width').val();
 
     aisle = jQuery('input#custom-aisle-dim').val();
 
-    if (aisle == ''){
-      jQuery("input[type='radio'][name='aisle']").each((ix, obj) => {  
-          const el      = jQuery(obj)
-          const value   = el.data('value'); 
-          const checked = el.prop('checked'); 
+    if (aisle == '') {
+      jQuery("input[type='radio'][name='aisle']").each((ix, obj) => {
+        const el = jQuery(obj)
+        const value = el.data('value');
+        const checked = el.prop('checked');
 
-          if (checked){
-            aisle = value;
-          }
+        if (checked) {
+          aisle = value;
+        }
 
-          //console.log(level, checked)
+        //console.log(level, checked)
       });
-    }   
+    }
 
-    return {
+    params = {
       height,
       depth,
       beam_length,
       beam_levels,
-      wireDecking,
-      palletSupports,
       length,
       width,
-      aisle
+      aisle,
+      usesupport  : palletSupports,
+      usewiredeck : wireDecking,
     };
+
+    if (as_string){
+      return getQueryString(params);
+    } 
+
+    return params;
   }
 
   // Limpio valor de aisle si selecciona de la lista
-  jQuery("input[type='radio'][name='aisle']").click(()=>{
+  jQuery("input[type='radio'][name='aisle']").click(() => {
     jQuery('input#custom-aisle-dim').val('')
   });
 
@@ -478,7 +502,7 @@ $dims = $cfg['dims'];
     hide(prev);
   }
 
-  const getCurrentStep = () => {
+  const getcurrent_step = () => {
     return jQuery('.list-step li.active').index() + 1;
   }
 
@@ -491,7 +515,7 @@ $dims = $cfg['dims'];
   }
 
   const move2Step = (num) => {
-    hideStep(getCurrentStep())
+    hideStep(getcurrent_step())
     showStep(num)
   }
 
@@ -499,12 +523,12 @@ $dims = $cfg['dims'];
     const steps = jQuery('.list-step li').length;
 
     const updateNavigationButtons = () => {
-      const currentStep = jQuery('.list-step li.active').index() + 1;
+      const current_step = jQuery('.list-step li.active').index() + 1;
 
-      if (currentStep === 1) {
+      if (current_step === 1) {
         disable(prev);
         show(next);
-      } else if (currentStep < steps) {
+      } else if (current_step < steps) {
         show(prev);
         show(next);
       } else {
@@ -512,22 +536,28 @@ $dims = $cfg['dims'];
         hide(next);
       }
 
-      if (currentStep === 4){
+      mergeQueryParamsIntoHistoryAPI({
+        current_step
+      })
+
+      if (current_step === 4) {
+        const params = getParams(true);
+
         updateImage(params);
 
         getPalletQty(endpoint_calc, params, verb, dataType, contentType)
-        .then(palletQty => {
+          .then(palletQty => {
             jQuery('#lb_pallet_qty').text(palletQty)
-        })
-        .catch(error => {
+          })
+          .catch(error => {
             console.error(error.message);
-        });
+          });
       }
     };
 
     const updateContent = () => {
-      const currentStep = jQuery('.list-step li.active').index() + 1;
-      move2Step(currentStep);
+      const current_step = jQuery('.list-step li.active').index() + 1;
+      move2Step(current_step);
     }
 
     // Inicializar el primer paso como activo

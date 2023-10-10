@@ -23,16 +23,19 @@ $dims = $cfg['dims'];
     icon: "warning", // "warning", "error", "success" and "info"
   }
 
-  let completed_step = null;
-  let pallet_qty;
-  
+  let state = {
+    completed_step: null,
+    pallet_qty: null
+  };
+
+ 
   // let params = 'design=multiple-rows&condition=new&height=96&depth=42&beam_length=96&beam_levels=2&length=50&width=200&aisle=132&usesupport=false&usewiredeck=false';
 
 
   document.addEventListener("DOMContentLoaded", function() {
 
     jQuery("input[type='radio'][name='selected-level']").change(() => {
-      if (completed_step === null || completed_step == '') {
+      if (completed_step === null || state.completed_step == null || state.completed_step == '') {
         completed_step = 1;
       }
 
@@ -417,14 +420,20 @@ $dims = $cfg['dims'];
                           </div><!---->
                         </div>
                       </div>
+
                       <div class="clearfix aisle-wrapper">
-                        <div class="-item-inline">
-                          <div class="form-group text-center"><label for="itemCheck-5" class="check-default -l"><input type="radio" id="itemCheck-5" name="aisle" data-ng-checked="customeAisle"> <span class="h4">Enter a custom aisle
-                                dimension</span></label>
-                            <input type="number" id="custom-aisle-dim" class="form-control -small" style="margin: auto; margin-top: 15px; display:none;" placeholder="inches">
+                        <div class="row -item-inline">
+                          <div class="form-group text-center"><label for="itemCheck-5" class="check-default -l"><input type="radio" id="itemCheck-5" name="aisle" data-ng-checked="customeAisle"> <span class="h4">Enter a custom aisle dimension</span></label>
                           </div>
+
+                          <div class="input-group col-lg-2 col-md-2 col-sm-3 col-xs-4 text-center" style="margin: auto; margin-top: 15px; margin-bottom: 10px; display: none;">
+                            <input type="number" class="form-control" id="custom-aisle-dim" placeholder="inches" aria-label="inches">
+                            <span class="input-group-addon btn" id="btn-set-aisle">OK</span>
+                          </div>
+                          
                         </div>
                       </div>
+
                     </div><!----><!---->
                   </div>
                 </div><!---->
@@ -624,9 +633,9 @@ $dims = $cfg['dims'];
       const el = jQuery(this)
 
       if (el.attr('id') == 'itemCheck-5') {
-        jQuery('#custom-aisle-dim').show()
+        jQuery('#custom-aisle-dim').parent().show()
       } else {
-        jQuery('#custom-aisle-dim').hide()
+        jQuery('#custom-aisle-dim').parent().hide()
       }
     });
 

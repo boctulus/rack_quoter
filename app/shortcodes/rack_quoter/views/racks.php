@@ -25,6 +25,7 @@ $dims = $cfg['dims'];
 
   let state = {
     completed_step: null,
+    aisle: null,
     pallet_qty: null
   };
 
@@ -34,22 +35,46 @@ $dims = $cfg['dims'];
 
   document.addEventListener("DOMContentLoaded", function() {
 
-    jQuery("input[type='radio'][name='selected-level']").change(() => {
-      if (completed_step === null || state.completed_step == null || state.completed_step == '') {
-        completed_step = 1;
-      }
+    document.querySelectorAll("input[type='radio'][name='selected-level']").forEach(function(el) {
+        el.addEventListener('change', function() {
+            if (state.completed_step === null || state.completed_step == null || state.completed_step == '') {
+                state.completed_step = 1;
+            }
 
-      let params = getParams()
+            let params = getParams();
 
-      params.completed_step = completed_step;
-      params.current_step   = 1;
+            params.completed_step = state.completed_step;
+            params.current_step = 1;
 
-      mergeQueryParamsIntoHistoryAPI(params)
+            mergeQueryParamsIntoHistoryAPI(params);
+        });
     });
+
+    document.getElementById('btn-set-aisle').addEventListener('click', function(e) {
+      const aisle = document.querySelector('input#custom-aisle-dim').value;
+
+        if (aisle !== ''){
+            state.aisle = aisle;
+        }
+    });
+
+    document.querySelectorAll("input[type='radio'][name='aisle']").forEach(function(el) {
+      el.addEventListener('click', function() {
+            const value = el.dataset.value;
+            const checked = el.checked;
+
+            if (checked) {
+                state.aisle = value;
+            }
+
+            //console.log(level, checked)
+        });
+    });
+
 
   });
 
-
+  
   const getParams = (as_string = false) => {
     let design = 'multiple-rows';
     let condition = 'new';
@@ -104,22 +129,6 @@ $dims = $cfg['dims'];
     length = jQuery('input#length').val();
     width = jQuery('input#width').val();
 
-    aisle = jQuery('input#custom-aisle-dim').val();
-
-    if (aisle == '') {
-      jQuery("input[type='radio'][name='aisle']").each((ix, obj) => {
-        const el = jQuery(obj)
-        const value = el.data('value');
-        const checked = el.prop('checked');
-
-        if (checked) {
-          aisle = value;
-        }
-
-        //console.log(level, checked)
-      });
-    }
-
     params = {
       height,
       depth,
@@ -127,7 +136,7 @@ $dims = $cfg['dims'];
       beam_levels,
       length,
       width,
-      aisle,
+      aisle : state.aisle,
       usesupport  : palletSupports,
       usewiredeck : wireDecking,
     };

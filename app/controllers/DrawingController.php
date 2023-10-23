@@ -298,4 +298,35 @@ class DrawingController
 
         $im->render();                      
     }
+
+    function render_datasheet()
+    {
+        $upright_depth  = $_GET['depth']  ?? null;
+        $upright_height = $_GET['height'] ?? null;
+        $w_feets        = $_GET['width']  ?? null;
+       
+        $im = new Imaginator();
+
+        $im->loadImage(SHORTCODES_PATH ."rack_quoter/assets/img/datasheet_blank.jpeg");
+
+        $im->createColor('black', 0,0,0);
+        $im->createColor('white', 255,255,255);
+
+        $im->setBackgroundColor('white');
+        $im->invertColors();
+
+        $font_1 = ASSETS_PATH . 'fonts/Swiss 721 Light BT.ttf';
+        //$font_2 = ASSETS_PATH . 'fonts/Swiss721BT-Light.otf';
+
+        // Height
+         $im->text(920, 322,         "$upright_height'", null, $font_1, 24);
+
+        // Width
+        $im->text(920, 322 + 37,     "$w_feets ft",      null, $font_1, 24);
+
+        // Deep
+        $im->text(920, 322 + 37 * 2, "$upright_depth'",  null, $font_1, 24);
+
+        $im->render();    
+    }
 }

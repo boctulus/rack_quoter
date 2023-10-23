@@ -11,8 +11,9 @@ $dims = $cfg['dims'];
 <script>
   const base_url = '<?= Url::getBaseUrl() ?>'
 
-  const endpoint_calc = base_url + '/api/drawing/calc'
-  const endpoint_draw = base_url + '/api/drawing/preview'
+  const endpoint_calc      = base_url + '/api/drawing/calc'
+  const endpoint_draw      = base_url + '/api/drawing/preview'
+  const endpoint_datasheet = base_url + '/api/drawing/datasheet'
   const verb = 'GET'
   const dataType = 'json' // pudo ser "json"
   const contentType = 'application/json'
@@ -73,6 +74,7 @@ $dims = $cfg['dims'];
     params = getParams(true);
 
     updateImage(params);
+    updateDataSheet(params);
 
     getPalletQty(endpoint_calc, params, verb, dataType, contentType)
     .then(palletQty => {
@@ -175,6 +177,14 @@ $dims = $cfg['dims'];
     console.log('img src', img_src);
 
     jQuery('#rendered-img').attr('src', img_src);
+  }
+
+  const updateDataSheet = (params) => {
+    const img_src = endpoint_datasheet + '?' + params;
+
+    console.log('img src', img_src);
+
+    jQuery('#rendered-datasheet').attr('src', img_src);
   }
 
   const getPalletQty = async (endpoint_calc, params, verb, dataType, contentType) => {
@@ -392,6 +402,8 @@ $dims = $cfg['dims'];
 
                 <div class="main-img">
                   <img src="<?= asset('img/1x1-00ff007f.png') ?>" id="rendered-img">
+                  <br>
+                  <img src="<?= shortcode_asset(__DIR__ . '/img/datasheet_blank.jpeg') ?>" style="margin-top: -10px" id="rendered-datasheet">
                 </div><!---->
                 <div><!---->
                   <p class="subheading">Redraw With Different Forklift</p><!---->
@@ -485,13 +497,13 @@ $dims = $cfg['dims'];
 
 <script>
 
-  const prev = jQuery('#tabPrev');
-  const next = jQuery('#tabNext');
-  const decking = jQuery('.-item-tab-half.decking')
-  const pallets = jQuery('.-item-tab-half.pallets')
+  const prev            = jQuery('#tabPrev');
+  const next            = jQuery('#tabNext');
+  const decking         = jQuery('.-item-tab-half.decking')
+  const pallets         = jQuery('.-item-tab-half.pallets')
 
-  const wireDeckingY = jQuery("label[for='wireDeckingY']");
-  const wireDeckingN = jQuery("label[for='wireDeckingN']");
+  const wireDeckingY    = jQuery("label[for='wireDeckingY']");
+  const wireDeckingN    = jQuery("label[for='wireDeckingN']");
   const palletSupportsY = jQuery("label[for='palletSupportsY']");
   const palletSupportsN = jQuery("label[for='palletSupportsN']");
 

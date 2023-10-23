@@ -54,9 +54,17 @@ function rack_quoter($args = [])
 }
 
 
-// shortcode
+/*
+    Shortcode
+
+    Para iniciar abierto usar asi:
+
+    [rack-quoter-modal open=true]
+*/
 function rack_quoter_modal($args = [])
 {   
+    $open = $args['open'] ?? false;
+
     ob_start(); // Inicia el almacenamiento en el búfer de salida    
     ?>
    
@@ -83,8 +91,16 @@ function rack_quoter_modal($args = [])
         </div>
     </div>
 
+    <?php if ($open): ?>
+        <script type="text/javascript">
+            jQuery(document).ready(function(){
+                jQuery('#rack_quoter-modal').modal('show');
+            });
+        </script>
+    <?php endif; ?>
+
     <?php
-    
+
     $output = ob_get_clean(); // Obtiene el contenido del búfer y lo limpia
     return $output; // Retorna el contenido almacenado
 }

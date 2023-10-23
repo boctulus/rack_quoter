@@ -45,6 +45,7 @@ class ApiClient
     // Cache
     protected $expiration;
     protected $read_only = false;
+    protected $cache_post_request = false;
 
     // Mock
     protected $mocked;
@@ -286,6 +287,11 @@ class ApiClient
     */
     function clearCache(){
         unlink($this->getCachePath());
+        return $this;
+    }
+
+    function enablePostRequestCache(){
+        $this->cache_post_request = true;
         return $this;
     }
 
@@ -926,7 +932,7 @@ class ApiClient
     }
 
 	protected function saveResponse(Array $response){
-        if ($this->verb != 'GET'){
+        if ($this->cache_post_request === false && $this->verb != 'GET'){
             return;
         }
 

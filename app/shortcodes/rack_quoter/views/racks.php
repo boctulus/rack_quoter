@@ -67,11 +67,18 @@ $dims = $cfg['dims'];
     Calc and draw 
   */
   const calc_draw = () => {
+    if (getCurrentStep() != 4){
+      return;
+    }
+
     if (nonEmptyValues(getParams()) === false){
       return;
     }
 
     params = getParams(true);
+
+    jQuery('#printDrawingBtn').show();
+    jQuery('#getQuoteBtn').show();    
 
     updateImage(params);
     updateDataSheet(params);
@@ -86,8 +93,6 @@ $dims = $cfg['dims'];
   }
 
   document.addEventListener("DOMContentLoaded", function() {
-   
-
     height      = jQuery('#sel-height').val();
     depth       = jQuery('#sel-depth').val();
     beam_length = jQuery('#sel-beam_length').val();
@@ -157,9 +162,7 @@ $dims = $cfg['dims'];
       updateState({width: this.value});
     });
 
-
   });
-
 
 
   // Limpio valor de aisle si selecciona de la lista
@@ -185,6 +188,16 @@ $dims = $cfg['dims'];
     console.log('img src', img_src);
 
     jQuery('#rendered-datasheet').attr('src', img_src);
+  }
+
+  const printDrawing = () => {
+    jQuery("#rendered-img").printThis({                   
+      printDelay: 2500,          
+    });
+  }
+
+  const getQuote = () => {
+    // ....
   }
 
   const getPalletQty = async (endpoint_calc, params, verb, dataType, contentType) => {
@@ -402,9 +415,9 @@ $dims = $cfg['dims'];
 
                 <div class="main-img">
                   <img src="<?= asset('img/1x1-00ff007f.png') ?>" id="rendered-img">
-                  <br>
-                  <img src="<?= shortcode_asset(__DIR__ . '/img/datasheet_blank.jpeg') ?>" style="margin-top: -10px" id="rendered-datasheet">
+                  <img src="<?= shortcode_asset(__DIR__ . '/img/datasheet_blank.jpeg') ?>" style="margin-top: -30px" id="rendered-datasheet">
                 </div><!---->
+
                 <div><!---->
                   <p class="subheading">Redraw With Different Forklift</p><!---->
                   <div class="-content alignment" style="margin-top:-35px;"><span class="primary-description" style="font-style: italic;">Click Below to view your space
@@ -472,27 +485,36 @@ $dims = $cfg['dims'];
           </div>
         </div>
 
-
-
       </div><!-- end step -->
-
-
 
       <!---->
     </div>
   </div>
+
   <div class="main-form-btn-group">
+
     <button id="tabPrev" class="btn btn-primary -prev no-animate d-none">
       <i class="fa fa-angle-left"></i>
       <span>Back</span>
     </button>
+
     <button id="tabNext" class="btn btn-primary -next">
       <span>Next</span>
       <!-- span class="d-none">View Drawing</span -->
       <i class="fa fa-angle-right"></i>
     </button>
+
+    <button class="btn btn-primary" id="printDrawingBtn" onclick="printDrawing()">
+      <i class="fa fa-print"></i> <span>print drawing</span>
+    </button>
+
+    <button class="btn btn-primary -next" id="getQuoteBtn" onclick="getQuote()">
+      <span>get a quote</span> <i class="fa fa-angle-right"></i>
+    </button>
+
   </div>
-  <!---->
+
+
 </div>
 
 <script>
@@ -537,7 +559,7 @@ $dims = $cfg['dims'];
     hide(prev);
   }
 
-  const getcurrent_step = () => {
+  const getCurrentStep = () => {
     return jQuery('.list-step li.active').index() + 1;
   }
 
@@ -550,7 +572,7 @@ $dims = $cfg['dims'];
   }
 
   const move2Step = (num) => {
-    hideStep(getcurrent_step())
+    hideStep(getCurrentStep())
     showStep(num)
   }
 
@@ -574,15 +596,18 @@ $dims = $cfg['dims'];
       } else {
         show(prev);
         hide(next);
+      }    
+
+      if (current_step === 4) {
+        calc_draw();
+      } else {
+        jQuery('#printDrawingBtn').hide();
+        jQuery('#getQuoteBtn').hide();  
       }
 
       mergeQueryParamsIntoHistoryAPI({
         current_step
       })
-
-      if (current_step === 4) {
-        calc_draw();
-      }
     };
 
     const updateContent = () => {
@@ -690,7 +715,6 @@ $dims = $cfg['dims'];
     palletSupportsN.find('input').change(function() {
       palletsHandler()
     });
-
 
 
     // move2Step(4); ///////

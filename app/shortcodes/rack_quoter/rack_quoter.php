@@ -11,6 +11,9 @@ enqueue(function(){
     css_file('third_party/bootstrap/3.x/bootstrap.min.css');
     css_file('third_party/bootstrap/3.x/normalize.css');
     js_file('third_party/bootstrap/3.x/bootstrap.min.js');
+
+    // JS printer
+    js_file("third_party/printThis/printThis.js");
         
     css_file(__DIR__ . '/assets/css/racks.css'); 
     css_file(__DIR__ . '/assets/css/styles.css');

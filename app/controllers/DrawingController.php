@@ -149,12 +149,14 @@ class DrawingController
 
         $this->calc_pallets();
 
-        if (isset($_GET['inv_color']) && $_GET['inv_color'] == 1 || $_GET['inv_color'] === 'true'){
-            $color_inv = true;
-        } else {
-            $color_inv = env('INV_COLOR', "0");
-            $color_inv = ($color_inv == '1' || $color_inv == 'true');
-        }
+        $color_inv = false;
+
+        // if (isset($_GET['inv_color']) && $_GET['inv_color'] == 1 || $_GET['inv_color'] === 'true'){
+        //     $color_inv = true;
+        // } else {
+        //     $color_inv = env('INV_COLOR', "0");
+        //     $color_inv = ($color_inv == '1' || $color_inv == 'true');
+        // }
 
         // Definir dimensiones y colores
         $ancho = 800; // $_GET['img_w']
@@ -286,7 +288,7 @@ class DrawingController
         $im->text($x - 2, $y + $h  -3, "$upright_depth''"              , null, $font_2, 15);
 
         // Numero que aparece apaisado del lado derecho
-        $im->text($x_end + 45, $y + floor($y_usr / 2), $w_feets . "'",   null, $font_2, 15, 90);
+        $im->text($x_end + 45, $y + floor($y_usr / 2), $w_feets . " ft",   null, $font_2, 15, 90);
 
         // Leyendas de los pasillos (aisle)
         $lbl = M::toFeetAndInches($aisle);
@@ -313,7 +315,10 @@ class DrawingController
         $im->createColor('white', 255,255,255);
 
         $im->setBackgroundColor('white');
-        $im->invertColors();
+
+        if (isset($_GET['inv_color']) && $_GET['inv_color'] == 1 || $_GET['inv_color'] === 'true'){
+            $im->invertColors();
+        }
 
         $font_1 = ASSETS_PATH . 'fonts/Swiss 721 Light BT.ttf';
         //$font_2 = ASSETS_PATH . 'fonts/Swiss721BT-Light.otf';

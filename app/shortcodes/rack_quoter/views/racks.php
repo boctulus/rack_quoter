@@ -175,7 +175,7 @@ $dims = $cfg['dims'];
   }
 
   const updateImage = (params) => {
-    const img_src = endpoint_draw + '?' + params + '&img_w=' + getImageWidth();
+    const img_src = endpoint_draw + '?' + params;
 
     console.log('img src', img_src);
 
@@ -191,7 +191,7 @@ $dims = $cfg['dims'];
   }
 
   const printDrawing = () => {
-    jQuery("#rendered-img").printThis({                   
+    jQuery("#printable").printThis({                   
       printDelay: 2500,          
     });
   }
@@ -226,7 +226,7 @@ $dims = $cfg['dims'];
 
 <div class="row">
   <div class="main-form">
-    <!---->
+    
     <ul class="list-step">
       <li class="active">
         <a aria-controls="step-01">Rack Dimensions</a>
@@ -234,20 +234,20 @@ $dims = $cfg['dims'];
       <li>
         <a aria-controls="step-02">Decking Options</a>
       </li>
-      <!---->
+      
       <li>
         <a aria-controls="step-03">Space Av.</a>
       </li>
-      <!---->
-      <!---->
+      
+      
       <li>
         <a aria-controls="step-04">Aisle Dimensions</a>
       </li>
-      <!---->
-      <!---->
-      <!---->
+      
+      
+      
     </ul>
-    <!---->
+    
     <div class="tab-content">
 
       <div id="step-01" class="active tab-pane clearfix">
@@ -297,21 +297,21 @@ $dims = $cfg['dims'];
             <div class="col-sm-8">
               <div class="check-wrapper">
                 <?php foreach (range(2, $dims['max_levels']) as $level) : ?>
-                  <!---->
+                  
                   <label class="check-default line" style="margin-right: 0px; margin-left: 3px;">
                     <input type="radio" name="selected-level" data-level="<?= $level ?>" class="ng-pristine ">
                     <span><?= $level ?></span>
                   </label>
-                  <!---->
+                  
                 <?php endforeach; ?>
               </div>
             </div>
           </div>
         </div>
         <div class="-item -img">
-          <!---->
+          
           <img src="<?= shortcode_asset(__DIR__ . '/img/NewPalletRack.png') ?>">
-          <!---->
+          
           <p class="-img-caption">4 Beam Levels in diagram</p>
         </div>
       </div>
@@ -363,17 +363,17 @@ $dims = $cfg['dims'];
       </div>
 
       <div id="step-03" class="clearfix tab-pane text-center d-none">
-        <!---->
-        <!---->
-        <!---->
+        
+        
+        
         <h4>What is the length and width of the space where you want pallet rack?</h4>
-        <!---->
+        
         <div class="-img centered">
-          <!---->
+          
           <img src="<?= shortcode_asset(__DIR__ . '/img/multiple.png') ?>">
-          <!---->
-          <!---->
-          <!---->
+          
+          
+          
         </div>
         <form role="form" name="areaForm" class="form-material ng-valid-maxlength ng-valid-required" style="margin-top: 50px;">
           <div class="clearfix">
@@ -382,18 +382,18 @@ $dims = $cfg['dims'];
                 <label for="length" class="-primary">Length</label>
                 <input type="number" id="length" name="length" class="form-control ng-valid-maxlength ng-valid-required" valid-number="" placeholder="feet">
                 <div class="text-right ">
-                  <!---->
+                  
                 </div>
               </div>
-              <!---->
+              
               <div class="form-group -custom validation-group">
                 <label for="width" class="-secondary">Width</label>
                 <input type="number" id="width" name="width" class="form-control ng-valid-maxlength ng-valid-required" valid-number="" placeholder="feet">
                 <div class="text-right ">
-                  <!---->
+                  
                 </div>
               </div>
-              <!---->
+              
             </div>
           </div>
         </form>
@@ -404,60 +404,73 @@ $dims = $cfg['dims'];
           <a href="/" class="navbar-brand">
             <img src="<?= shortcode_asset(__DIR__ . '/img/WES-Logo.png') ?>" alt="logo" style="max-height: 45px;">
           </a>
-          <h2 style="font-size: 40px">Pallet Rack Layout Drawing</h2><!---->
+          <h2 style="font-size: 40px">Pallet Rack Layout Drawing</h2>
           <p id="palletsCount" class="subheading">
-            This Layout Will Store <span id="lb_pallet_qty"></span> Pallets</p><!---->
+            This Layout Will Store <span id="lb_pallet_qty"></span> Pallets</p>
         </div>
         <div class="clearfix">
           <div class="row">
             <div class="col-md-12 col-xs-12 text-center">
               <div class="-content">
 
-                <div class="main-img">
-                  <img src="<?= asset('img/1x1-00ff007f.png') ?>" id="rendered-img">
-                  <img src="<?= shortcode_asset(__DIR__ . '/img/datasheet_blank.jpeg') ?>" style="margin-top: -30px" id="rendered-datasheet">
-                </div><!---->
+                <div id="printable">
+                  <div class="row" class="main-img">
+                    <div class="col-12">
+                      <img src="<?= shortcode_asset(__DIR__ . '/img/WES-Logo.png') ?>" id="printable-logo">
+                    </div>
+                  </div>
+                  <div class="row" class="main-img">
+                    <div class="col-12">
+                      <img src="<?= asset('img/1x1-00ff007f.png') ?>" class="img-responsive" id="rendered-img">
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-12">
+                      <img src="<?= shortcode_asset(__DIR__ . '/img/datasheet_blank.jpeg') ?>" class="img-responsive" id="rendered-datasheet">
+                    </div>
+                  </div>
+                </div>
 
-                <div><!---->
-                  <p class="subheading">Redraw With Different Forklift</p><!---->
+                <div>
+                  <p class="subheading">Redraw With Different Forklift</p>
                   <div class="-content alignment" style="margin-top:-35px;"><span class="primary-description" style="font-style: italic;">Click Below to view your space
-                      with a different aisle dimension</span><!---->
+                      with a different aisle dimension</span>
                     <div aisle="controller.Model.Aisle">
                       <div class="flex sb sm-c wrap aisle-wrapper">
                         <div class="-item-inline">
                           <div class="-caption"><label for="itemCheck-4" class="check-default -l"><input type="radio" id="itemCheck-4" name="aisle" data-value="66" class="ng-pristine" checked="checked"> <span>5' 6''
-                                Aisle</span></label></div><!---->
+                                Aisle</span></label></div>
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img04.png') ?>">
                             <h4>Drexel Forklift</h4>
-                          </div><!---->
+                          </div>
                         </div>
                         <div class="-item-inline">
                           <div class="-caption"><label for="itemCheck-3" class="check-default -l"><input type="radio" id="itemCheck-3" name="aisle" data-value="78" class="ng-pristine "> <span>6' 6''
-                                Aisle</span></label></div><!---->
+                                Aisle</span></label></div>
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img03.png') ?> ">
                             <h4>Bendi Forklift</h4>
-                          </div><!---->
+                          </div>
                         </div>
                         <div class="-item-inline">
                           <div class="-caption"><label for="itemCheck-2" class="check-default -l"><input type="radio" id="itemCheck-2" name="aisle" data-value="114" class="ng-pristine "> <span>9' 6''
-                                Aisle</span></label></div><!---->
+                                Aisle</span></label></div>
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img02.png') ?>">
                             <h4>Reach Truck</h4>
-                          </div><!---->
+                          </div>
                         </div>
                         <div class="-item-inline">
                           <div class="-caption"><label for="itemCheck-6" class="check-default -l"><input type="radio" id="itemCheck-6" name="aisle" data-value="132" class="ng-pristine "> <span>11'
-                                Aisle</span></label></div><!---->
+                                Aisle</span></label></div>
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img03.png') ?>">
                             <h4>3 wheel forklift</h4>
-                          </div><!---->
+                          </div>
                         </div>
                         <div class="-item-inline">
                           <div class="-caption"><label for="itemCheck-1" class="check-default -l"><input type="radio" id="itemCheck-1" name="aisle" data-value="156" class="ng-pristine "> <span>13'
-                                Aisle</span></label></div><!---->
+                                Aisle</span></label></div>
                           <div class="-img"><img src="<?= shortcode_asset(__DIR__ . '/img/tab4-img01.png') ?>">
                             <h4>4 wheel forklift</h4>
-                          </div><!---->
+                          </div>
                         </div>
                       </div>
 
@@ -477,9 +490,9 @@ $dims = $cfg['dims'];
                       </div>
                       
 
-                    </div><!----><!---->
+                    </div>
                   </div>
-                </div><!---->
+                </div>
               </div>
             </div>
           </div>
@@ -487,7 +500,7 @@ $dims = $cfg['dims'];
 
       </div><!-- end step -->
 
-      <!---->
+      
     </div>
   </div>
 

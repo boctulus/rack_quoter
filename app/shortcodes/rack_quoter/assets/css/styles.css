@@ -13,3 +13,21 @@
 #rendered-img, #rendered-datasheet {
     width: 1000px;
 }
+
+#printable {
+    margin-bottom: 20px;
+}
+
+#printable-logo {
+    display: none;
+    width: 20%;
+    height: auto;
+    margin-bottom: 15px;
+}
+
+/* CSS para la impresión: mostrar el logo */
+@media print {
+    #printable-logo {
+        display: block;
+    }
+}

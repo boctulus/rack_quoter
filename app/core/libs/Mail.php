@@ -6,41 +6,47 @@
 
 namespace boctulus\SW\core\libs;
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
+use boctulus\SW\core\libs\Config;
 
-use boctulus\SW\core\libs\Files;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\PHPMailer;
 
 require_once ABSPATH . 'wp-includes/PHPMailer/Exception.php';
 require_once ABSPATH . 'wp-includes/PHPMailer/PHPMailer.php';
 require_once ABSPATH . 'wp-includes/PHPMailer/SMTP.php';
 
+/*
+  Cambiar algunos métodos a de intancia a fin de poder usar métodos encadenados
 
-class Mail 
+  ->to(..)
+  ->body(..)
+  ->etc
+
+  Ej:
+    
+    Mail::debug(4);
+    //Mail::silentDebug();
+
+    Mail::Config::get([
+        'ssl' => [
+            'allow_self_signed' => true,
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+    ]]);
+
+
+    $msg = "Cuerpo del mensaje";
+
+    Mail::send(get_option('admin_email'), '[ Divorcio ] Tiene una nueva cita con un cliente', nl2br($msg));
+
+    debug(Mail::errors(), 'Error');
+    debug(Mail::status(), 'Status');
+
+*/
+class Mail extends MailBase
 {
     protected static $mailer      = null;
     protected static $options     = [];
-    protected static $errors      = null; 
-    protected static $status      = null; 
-    protected static $silent      = false;
-    protected static $debug_level = null;
-    protected static $use_wp_mail = false;
-
-    static function getAdminEmail(){
-        return get_option('admin_email');
-    }
-
-    static function useWPMail(bool $val){
-        static::$use_wp_mail = $val;
-    }
-
-    static function errors(){
-        return static::$errors;
-    }
-
-    static function status(){
-        return (empty(static::$errors)) ? 'OK' : 'error';
-    }
 
     // change mailer
     static function setMailer(string $name){
@@ -48,7 +54,7 @@ class Mail
     }
 
     static function getMailer(){
-        global $config;
+        $config = Config::get();
         return static::$mailer ?? $config['email']['mailer_default'];
     }
 
@@ -74,7 +80,7 @@ class Mail
 
         $level = static::$debug_level ?? $level ?? $default_debug_level ?? 4;
 
-        static::config([
+        static::Config::get([
             'SMTPDebug' => $level
         ]);
 
@@ -91,55 +97,53 @@ class Mail
         static::$debug_level = $level;
     }
 
-    /*  
-        https://stackoverflow.com/a/39893796/980631
+    /*
+        Usar una interfaz común para SMTP y correos via API
 
-        Ver tambi'en
+        Es preferible recibir $from y  $replyTo como arrays de la forma:
+            
+            [
+                'name' => 'xxx',
+                'email' => 'xxxxx@xxx.com'
+            ]
 
-        https://andres-dev.com/enviar-correos-usando-wp-mail-wordpress/
+        y $to como un array de arrays:
+
+        [
+            [
+                'name' => 'xxx',
+                'email' => 'xxxxx@xxx.com'
+            ], 
+            
+            // ...
+        ]
+
+        Ver
+        https://stackoverflow.com/questions/3149452/php-mailer-multiple-address
+        https://stackoverflow.com/questions/24560328/phpmailer-altbody-is-not-working
+
+        Gmail => habilitar:
+
+        https://myaccount.google.com/lesssecureapps
+
+        TODO
+
+        - Hacer que parametros que son de tipo Array puedan ser Array|string
+
+        send(
+            Array|string|null $to, 
+            $subject = '', 
+            $body = '', 
+            $attachments = null, 
+            Array|string|null $from = null, 
+            Array|string|null $cc = null, 
+            Array|string|null $bcc = null, 
+            Array|string|null $reply_to = null, 
+            $alt_body = null
+        )
     */
-    static function sendWP(Array $to, $subject = '', $body = '', $attachments = null, Array $from = [], Array $cc = [], Array $bcc = [], Array $reply_to = [])
-    {
-        $headers = [
-            'Content-Type: text/html; charset=UTF-8'
-        ];
-
-        if (!empty($from['email'])){
-            $headers[] = 'From: '. $from['email'];
-        }
-
-        if (!empty($reply_to['email'])){
-            $headers[] = 'Reply-To: '. $reply_to['email'];
-        }
-
-        if (!empty($cc['email'])){
-            $headers[] = 'Cc: '. $cc['email'];
-        }
-
-        if (!empty($bcc['email'])){
-            $headers[] = 'Bcc: '. $bcc['email'];
-        }
-
-        return wp_mail(
-            $to,
-            $subject,
-            strip_tags($body),
-            $headers,
-            $attachments
-        );
-    }
-
-    static function send(Array $to, $subject = '', $body = '', $attachments = null, Array $from = [], Array $cc = [], Array $bcc = [], Array $reply_to = [], $alt_body = null)
-    {
-        global  $config;
-        
-        /*
-            Puedo usar wp_mail() 
-        */
-        
-        if (static::$use_wp_mail){
-            return static::sendWP($to, $subject, $body, $attachments, $from, $cc, $bcc, $reply_to);
-        }
+    static function send($to, $subject = '', $body = '', $attachments = null, $from = [], Array $cc = [], $bcc = [], $reply_to = [], $alt_body = null){
+		$config = Config::get();
 
         $body = trim($body);
 
@@ -155,17 +159,41 @@ class Mail
             throw new \Exception("Body or alt_body is required");
         }
 
-        if (Arrays::is_assoc($to)){
-            $to = [ $to ];
+        if (!is_array($to)){
+            $tmp = $to;
+            $to  = [];
+            $to[]['email'] = $tmp;
+        } else {
+            if (Arrays::is_assoc($to)){
+                $to = [ $to ];
+            }
         }
 
-        if (Arrays::is_assoc($cc)){
-            $cc = [ $cc ];
+        if (!is_array($cc)){
+            $tmp = $cc;
+            $cc  = [];
+            $cc[]['email'] = $tmp;
+        } else {
+            if (Arrays::is_assoc($cc)){
+                $cc = [ $cc ];
+            }
         }
 
-        if (Arrays::is_assoc($bcc)){
-            $bcc = [ $bcc ];
+        if (!is_array($bcc)){
+            $tmp = $bcc;
+            $bcc  = [];
+            $bcc[]['email'] = $tmp;
+        } else {
+            if (Arrays::is_assoc($bcc)){
+                $bcc = [ $bcc ];
+            }
         }
+
+        if (!is_array($from)){
+            $tmp = $from;
+            $from = [];
+            $from['email'] = $tmp;
+        } 
 
         // if (empty($reply_to)){
         //     $reply_to = $from;
@@ -189,15 +217,15 @@ class Mail
         if (!empty($reply_to)){
             $mail->addReplyTo($reply_to['email'], $reply_to['name'] ?? '');
         }
+        
 
         $from['email'] = $from['email'] ?? $config['email']['from']['address'] ?? $config['email']['mailers'][$mailer]['Username'];
-        $from['mame'] = $from['mame'] ?? $config['email']['from']['name'];
+        $from['mame']  = $from['mame']  ?? $config['email']['from']['name'];
 
-        
         if (!empty($from)){
             $mail->setFrom($from['email'], $from['name'] ?? '');
         }
-
+        
         foreach ($to as $_to){
             $mail->addAddress($_to['email'], $_to['name'] ?? '');
         }
@@ -240,13 +268,13 @@ class Mail
             static::$errors = $mail->ErrorInfo;
 
             if (static::$silent){
-                Logger::dump(static::$errors, 'dump.txt', true);
+                Files::dump(static::$errors, 'dump.txt', true);
             }
 
             $ret = static::$errors;
         }else{
             if (static::$silent){
-                Logger::dump(true, 'dump.txt', true);
+                Files::dump(true, 'dump.txt', true);
             }
 
             static::$errors = null;
@@ -260,4 +288,5 @@ class Mail
 
         return $ret;
 	}
+    
 }

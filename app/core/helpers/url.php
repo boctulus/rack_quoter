@@ -1,7 +1,8 @@
 <?php
 
-use boctulus\SW\core\libs\Strings;
 use boctulus\SW\core\libs\Url;
+use boctulus\SW\core\libs\Config;
+use boctulus\SW\core\libs\Strings;
 use boctulus\SW\core\libs\ApiClient;
 
 /*
@@ -9,6 +10,16 @@ use boctulus\SW\core\libs\ApiClient;
 */
 function base_url(){
     static $base_url;
+
+    $app_url = Config::get('app_url');
+
+    if (empty($base_url) && !empty($app_url)){
+        return $app_url;
+    }
+
+    if (is_cli()) {
+        $base_url = home_url();
+    }
 
     if ($base_url !== null){
         return $base_url;

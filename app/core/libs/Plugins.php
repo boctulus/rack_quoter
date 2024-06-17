@@ -2,10 +2,10 @@
 
 namespace boctulus\SW\core\libs;
 
+use boctulus\SW\core\Constants;
+
 /*
 	@author boctulus
-
-    Version 1.5
 */
 
 if ( ! function_exists( 'get_plugins' ) ) {
@@ -116,6 +116,7 @@ class Plugins
     static function fullPath(string $plugin_name, bool $include_index_file = false){
         if ($include_index_file === false){
             $dir = static::PLUGIN_DIR . $plugin_name;
+
             return is_dir($dir) ? $dir : false;
         }
 
@@ -192,7 +193,9 @@ class Plugins
     static function getMeta($path = null){
         if ($path === null){
             $path = static::path();
-        }
+        };
+
+        $path = Files::normalize($path);
 
         if (!Strings::endsWith('.php', $path)){
             $path  = static::getIndexFile($path);
@@ -342,11 +345,10 @@ class Plugins
         return $path;
     } 
 
-    // adaptado a version 1.5 de SW
     static function currentName(){
         $path = static::path();
         $_pth = explode(DIRECTORY_SEPARATOR, $path);
-        $name = $_pth[count($_pth)-2];
+        $name = $_pth[count($_pth)-1];
  
         return $name;
     } 
@@ -356,13 +358,33 @@ class Plugins
     } 
 
     static function getVersion($plugin_name =  null){
-        $path = is_null($plugin_name) ? ROOT_PATH : static::fullPath($plugin_name);
+        if ($plugin_name !== null && !static::isActive($plugin_name)){
+            return false;
+        }
 
-        return Plugins::getMeta($path)['Version'] ?? '0.0.1';
+        $path = is_null($plugin_name) ? Constants::ROOT_PATH : static::fullPath($plugin_name);
+
+        return Plugins::getMeta($path)['Version'] ?? false;
+    }
+
+    static function getVersionOrFail($plugin_name =  null){
+        if (!static::isActive($plugin_name)){
+            throw new \Exception("Plugin '$plugin_name' is not installed");
+        }
+
+        $path = is_null($plugin_name) ? Constants::ROOT_PATH : static::fullPath($plugin_name);
+
+        $ver  = Plugins::getMeta($path)['Version'] ?? false;
+
+        if (empty($ver)){
+            throw new \Exception("Plugin version for '$plugin_name' is not available");
+        }
+
+        return $ver;
     }
 
     static function getTextDomain($plugin_name =  null){
-        $path = is_null($plugin_name) ? ROOT_PATH : static::fullPath($plugin_name);
+        $path = is_null($plugin_name) ? Constants::ROOT_PATH : static::fullPath($plugin_name);
 
         return Plugins::getMeta($path)['Text Domain'] ?? '0.0.1';
     }

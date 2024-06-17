@@ -16,10 +16,238 @@ use boctulus\SW\core\libs\Products;
 
     https://wpdavies.dev/how-to-get-woocommerce-order-details-beginners-guide/
 */
-class Orders 
+class Orders extends Posts
 {    
+    static $post_type   = 'shop_order';
+    static $cat_metakey = null;
+
+    static $statuses    = [
+        'wc-pending', 'wc-failed', 'wc-cancelled', 'wc-on-hold', 'wc-processing', 'wc-completed', 'wc-refunded'
+    ];
+
+    static function getOrder(int $order_id){
+        return wc_get_order($order_id);
+    }
+
+    static function getOrders(array $statuses)
+    {
+        global $wpdb;
+
+        $statuses = implode( "','", $statuses );
+
+        $sql = "
+        SELECT ID FROM {$wpdb->prefix}posts
+        WHERE post_type = 'shop_order'
+        AND post_status IN ('$statuses')
+        ";
+
+        $order_ids = $wpdb->get_col($sql);
+
+        return $order_ids;
+    }
+
+
+    /*
+    
+
+        Chequeo de si transicion entre estados de una orden es valida
+
+        pending ("wc-pending")
+
+        on-hold ("wc-on-hold")
+        processing ("wc-processing")
+        
+        cancelled ("wc-cancelled")
+        refunded ("wc-refunded")
+
+        failed ("wc-failed")
+        completed ("wc-completed")
+
+        pending > on-hold > processing > completed > refunded
+        pending > processing
+        pending > failed > cancelled
+    */
+    static function isValidOrderTransition($from, $to){
+        $valid = [
+            "wc-on-hold>wc-processing",   // ok
+            "wc-pending>wc-processing",   // ok
+            "wc-processing>wc-completed", // ok
+            "wc-on-hold>wc-completed",    // ok (manualmente se podría dar el caso)
+        ];
+
+        return in_array($from .'>'. $to, $valid);
+    }
+
+    /*
+        Ej. de params:
+
+        $products = [
+            [
+                'pid' => 1178,
+                'qty' => 3
+            ],
+            [
+                'pid' => 1176,
+                'qty' => 2
+            ]
+        ];
+        
+        $billing_address = array(
+            'first_name' => 'Joe',
+            'last_name'  => 'Conlin',
+            'company'    => 'Speed Society',
+            'email'      => 'joe@testing.com',
+            'phone'      => '760-555-1212',
+            'address_1'  => '123 Main st.',
+            'address_2'  => '104',
+            'city'       => 'San Diego',
+            'state'      => 'Ca',
+            'postcode'   => '92121',
+            'country'    => 'US'
+        );
+
+        Atributos. Ej:
+
+        [
+            '_customer_user'        => $userid,
+            // ...
+            '_payment_method'       => 'ideal',
+            '_payment_method_title' => 'iDeal'
+        ]
+
+        https://stackoverflow.com/a/50384706/980631
+        
+        En caso de querer crear la orden programaticamente, procesar un pago y redirigir ->
+        
+        https://stackoverflow.com/a/31987151/980631
+    */
+    static function createOrder(Array $products, Array $billing_address = null, Array $shipping_address = null, $attributes = [])
+    {   
+        // Now we create the order
+        $order = wc_create_order();
+        
+        foreach ($products as $product){
+            $p   = Products::getProduct($product['pid']);
+            $qty = $product['qty'];
+
+            // The add_product() function below is located in 
+            // plugins/woocommerce/includes/abstracts/abstract_wc_order.php
+            $order->add_product($p, $qty); 
+        }
+        
+        if (!empty($billing_address)){
+            $order->set_address( $billing_address, 'billing' );
+        }    
+
+        if (!empty($shipping_address)){
+            $order->set_address( $shipping_address, 'shipping' );
+        }
+
+        //
+        $order->calculate_totals();
+
+        if (!empty($attributes)){
+            foreach ($attributes as $att_name => $att_value){
+                update_post_meta($order->id, $att_name, $att_value);
+            }
+        }
+        
+        return $order;
+    }
+
+    /*
+        Create a bunch of random orders
+    */
+    static function createRandom(int $qty_orders = 10, Array $product_ids = null, Array $user_ids = null){
+        $order_ids = [];
+
+        for ($i=0; $i< $qty_orders; $i++){
+            if (empty($product_ids)){    
+                $product_ids = Products::getRandom(rand(1,4), true);
+            }
+
+            $products = [];
+            foreach ($product_ids as $pid){
+                $products[] = [
+                    'pid' => $pid,
+                    'qty' => rand(1,5)
+                ];
+            }
+
+            if (empty($user_ids)){
+                $user_ids = Users::getUserIDList();
+            }
+
+            $user_id = $user_ids[array_rand($user_ids,1)];
+
+            $order = static::create($products, null, null, [
+                '_customer_user' => $user_id,
+            ]);
+        
+            $order_ids[] = $order->get_id();
+        }
+
+        return $order_ids;
+    }
+
+    static function createRandomByRoles(int $qty_orders = 10, Array $user_roles = ['customer']){
+        $order_ids = [];
+
+        $user_ids = Users::getUsersByRole($user_roles);       
+
+        for ($i=0; $i< $qty_orders; $i++){
+            $pids = Products::getRandom(rand(1,4), true);
+        
+            $products = [];
+            foreach ($pids as $pid){
+                $products[] = [
+                    'pid' => $pid,
+                    'qty' => rand(1,5)
+                ];
+            }
+
+            $user_id = $user_ids[array_rand($user_ids,1)];
+        
+            $order = static::create($products, null, null, [
+                '_customer_user' => $user_id,
+            ]);
+        
+            $order_ids[] = $order->get_id();
+        }
+
+        return $order_ids;
+    }
+
+    static function setCustomMeta($order_id, $meta_key, $meta_value){
+        $order = wc_get_order( $order_id );
+        $order->update_meta_data($meta_key, $meta_value);
+        $order->save();
+    }
+
+    static function getCustomMeta($order_id, $meta_key){
+        $order = wc_get_order( $order_id );
+        return $order->get_meta($meta_key, true ); 
+    }
+
+    static function setOrderStatus($order, $new_status, $note = null){
+        if (!empty($new_status)){
+            $order->update_status($new_status, $note);
+        }
+    }
+
+    static function setLastOrderStatus($status){
+        static::setOrderStatus(static::getLastOrder(), $status);
+    }
+
+    static function addNote($order, string $note){
+        $order->add_order_note($note);
+    }
+
+    static function setCustomerId($order, $user_id){
+        $order->set_customer_id($user_id);
+    }
+
     static function getOrderId(\WC_Order $order){
-        // return $order->get_id();
         return trim(str_replace('#', '', $order->get_order_number()));
     }
 
@@ -101,194 +329,6 @@ class Orders
         ];
     }
 
-    /*
-        Chequeo de si transicion entre estados de una orden es valida
-
-        pending
-
-        on-hold
-        processing
-        
-        cancelled
-        refunded
-
-        failed
-        completed
-
-        pending > on-hold > processing > completed > refunded
-        pending > processing
-        pending > failed > cancelled
-    */
-    static function isValidOrderTransition($from, $to){
-        $valid = [
-            "on-hold>processing",   // ok
-            "pending>processing",   // ok
-            "processing>completed", // ok
-            "on-hold>completed",    // ok (manualmente se podría dar el caso)
-        ];
-
-        return in_array($from .'>'. $to, $valid);
-    }
-
-    /*
-        Ej. de params:
-
-        $products = [
-            [
-                'pid' => 1178,
-                'qty' => 3
-            ],
-            [
-                'pid' => 1176,
-                'qty' => 2
-            ]
-        ];
-        
-        $billing_address = array(
-            'first_name' => 'Joe',
-            'last_name'  => 'Conlin',
-            'company'    => 'Speed Society',
-            'email'      => 'joe@testing.com',
-            'phone'      => '760-555-1212',
-            'address_1'  => '123 Main st.',
-            'address_2'  => '104',
-            'city'       => 'San Diego',
-            'state'      => 'Ca',
-            'postcode'   => '92121',
-            'country'    => 'US'
-        );
-
-        Atributos. Ej:
-
-        [
-            '_customer_user'        => $userid,
-            // ...
-            '_payment_method'       => 'ideal',
-            '_payment_method_title' => 'iDeal'
-        ]
-
-        https://stackoverflow.com/a/50384706/980631
-        
-        En caso de querer crear la orden programaticamente, procesar un pago y redirigir ->
-        
-        https://stackoverflow.com/a/31987151/980631
-    */
-    static function create(Array $products, Array $billing_address = null, Array $shipping_address = null, $attributes = [])
-    {   
-        // Now we create the order
-        $order = wc_create_order();
-        
-        foreach ($products as $product){
-            $p   = Products::getProduct($product['pid']);
-            $qty = $product['qty'];
-
-            // The add_product() function below is located in 
-            // plugins/woocommerce/includes/abstracts/abstract_wc_order.php
-            $order->add_product($p, $qty); 
-        }
-        
-        if (!empty($billing_address)){
-            $order->set_address( $billing_address, 'billing' );
-        }    
-
-        if (!empty($shipping_address)){
-            $order->set_address( $shipping_address, 'shipping' );
-        }
-
-        //
-        $order->calculate_totals();
-
-        if (!empty($attributes)){
-            foreach ($attributes as $att_name => $att_value){
-                update_post_meta($order->get_id(), $att_name, $att_value);
-            }
-        }
-        
-        return $order;
-    }
-
-    /*
-        Create a bunch of random orders
-    */
-    static function createRandom(int $qty_orders = 10, Array $product_ids = null, Array $user_ids = null){
-        $order_ids = [];
-
-        for ($i=0; $i< $qty_orders; $i++){
-            if (empty($product_ids)){    
-                $product_ids = Products::getRandomProductIds(rand(1,4));
-            }
-
-            $products = [];
-            foreach ($product_ids as $pid){
-                $products[] = [
-                    'pid' => $pid,
-                    'qty' => rand(1,5)
-                ];
-            }
-
-            if (empty($user_ids)){
-                $user_ids = Users::getUserIDList();
-            }
-
-            $user_id = $user_ids[array_rand($user_ids,1)];
-
-            $order = Orders::create($products, null, null, [
-                '_customer_user' => $user_id,
-            ]);
-        
-            $order_ids[] = $order->get_id();
-        }
-
-        return $order_ids;
-    }
-
-    static function createRandomByRoles(int $qty_orders = 10, Array $user_roles = ['customer']){
-        $order_ids = [];
-
-        $user_ids = Users::getUsersByRole($user_roles);       
-
-        for ($i=0; $i< $qty_orders; $i++){
-            $pids = Products::getRandomProductIds(rand(1,4));
-        
-            $products = [];
-            foreach ($pids as $pid){
-                $products[] = [
-                    'pid' => $pid,
-                    'qty' => rand(1,5)
-                ];
-            }
-
-            $user_id = $user_ids[array_rand($user_ids,1)];
-        
-            $order = Orders::create($products, null, null, [
-                '_customer_user' => $user_id,
-            ]);
-        
-            $order_ids[] = $order->get_id();
-        }
-
-        return $order_ids;
-    }
-
-    static function setOrderStatus($order, $new_status, $note = null){
-        if (!empty($new_status)){
-            $order->update_status($new_status, $note);
-        }
-    }
-
-    static function setLastOrderStatus($status){
-        static::setOrderStatus(static::getLastOrder(), $status);
-    }
-
-    // setea status pero ademas agrega nota
-    static function addNote($order, string $new_status, string $note){
-        $order->update_status($new_status, $note);
-    }
-
-    static function setCustomerId($order, $user_id){
-        $order->set_customer_id($user_id);
-    }
-
     static function getShippingCosts(\Automattic\WooCommerce\Admin\Overrides\Order $order){
         $shipping_total = $order->get_shipping_total();
         $shipping_tax   = $order->get_shipping_tax();
@@ -310,7 +350,7 @@ class Orders
         if (is_numeric($order)){
             $order_id = $order;
         } else {
-            $order_id = Orders::getLastOrderId();
+            $order_id = static::getLastOrderId();
         }
 
         $and_author = ($author !== null) ? "AND `comment_author` = '$author'" : '';
@@ -345,7 +385,7 @@ class Orders
         if (is_numeric($order)){
             $order_id = $order;
         } else {
-            $order_id = Orders::getLastOrderId();
+            $order_id = static::getLastOrderId();
         }
 
         $and_author = ($author !== null) ? "AND `comment_author` = '$author'" : '';
@@ -370,6 +410,10 @@ class Orders
         return $val;
     }
 
+    static function getCustomerID(\Automattic\WooCommerce\Admin\Overrides\Order $order){
+        return $order->get_user_id();
+    }
+
     /*
         https://www.hardworkingnerd.com/woocommerce-how-to-get-a-customer-details-from-an-order/
     */
@@ -379,9 +423,6 @@ class Orders
 
         //this should return exactly the same number as the code above
         $user_id = $order->get_user_id();
-
-        // Get the WP_User Object instance object
-        $user = $order->get_user();
 
         /*
             Billing
@@ -549,12 +590,12 @@ class Orders
         Atajo para obtener items a partie del objeto de la orden
     */
     static function getOrderItemArray(object $order){
-        $order_items = Orders::getOrderItems($order);
+        $order_items = static::getOrderItems($order);
 
         $items = [];
         foreach ( $order_items as $item_id => $item ) 
         {
-            $items[] = Orders::orderItemToArray($item);
+            $items[] = static::orderItemToArray($item);
         }
 
         return $items;

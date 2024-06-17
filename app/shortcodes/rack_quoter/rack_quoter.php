@@ -3,6 +3,7 @@
 // SHORTCODE
 
 use boctulus\SW\core\libs\Plugins;
+use boctulus\SW\core\libs\Config;
 
 enqueue(function(){
     css_file('third_party/fontawesome5/all.min.css');
@@ -30,7 +31,7 @@ function rack_quoter($args = [])
         Settings
     */
 
-    $cfg = config(); 
+    $cfg = Config::get(); 
     // ...
 
     if (!Plugins::isActive('woocommerce')){
@@ -50,10 +51,6 @@ function rack_quoter($args = [])
     <?php 
 
         return get_view(SHORTCODES_PATH . 'rack_quoter/views/racks.php'); 
-
-    ?>
- 
-    <?php
 }
 
 

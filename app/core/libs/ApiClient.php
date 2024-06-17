@@ -3,6 +3,9 @@
 namespace boctulus\SW\core\libs;
 
 use boctulus\SW\core\libs\Url;
+use boctulus\SW\core\Constants;
+use boctulus\SW\core\libs\Config;
+use boctulus\SW\core\libs\CookieJar;
 
 /*
     Wrapper para Url::consume_api()
@@ -10,14 +13,27 @@ use boctulus\SW\core\libs\Url;
     @author Pablo Bozzolo
 */
 class ApiClient
-{
+{   
+    const HTTP_METH_POST   = "POST";
+    const HTTP_METH_GET    = "GET";
+    const HTTP_METH_PATCH  = "PATCH";
+    const HTTP_METH_PUT    = "PUT";
+    const HTTP_METH_DELETE = "DELETE";
+    const HTTP_METH_HEAD   = "HEAD";
 
-    const     HTTP_METH_POST   = "POST";
-    const     HTTP_METH_GET    = "GET";
-    const     HTTP_METH_PATCH  = "PATCH";
-    const     HTTP_METH_PUT    = "PUT";
-    const     HTTP_METH_DELETE = "DELETE";
-    const     HTTP_METH_HEAD   = "HEAD";
+    /*
+        User Agents
+    */
+    const USER_AG_FIREFOX = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0';
+    const USER_AG_SAFARI  = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Safari/605.1.15';
+    const USER_AGT_EDGE   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.79 Safari/537.36 Edg/100.0.4896.79';
+    const USER_AG_CHROME  = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36';
+    const USER_AG_POSTMAN = 'PostmanRuntime/7.34.0';
+
+
+    // Cookies
+    protected $cookieJar;
+    protected $curl;
 
     // Request
     protected $url;
@@ -25,17 +41,24 @@ class ApiClient
     protected $req_headers;
     protected $options = [];
     protected $body;
+    protected $req_body;
     protected $encode_body;
     protected $max_retries = 1;
     protected $cert_ssl  = null;
 
+    // Username & password
+    protected $username;
+    protected $password;
+
     // Response
     protected $raw_response;
     protected $response;
+
     protected $filename;
     protected $res_headers;
     protected $auto_decode;
     protected $status;
+    protected $ignore_status_codes = false;
     protected $error;
 
     // Response Info
@@ -57,6 +80,22 @@ class ApiClient
 
     // Extras
     protected $query_params = [];
+    protected $debug   =  false;
+    protected $show_req = false;
+    protected $show_res = false;
+
+
+    function showRequest(){
+        $this->show_req = true;
+    }
+
+    function getResource(){
+        return $this->curl;
+    }
+
+    function close(){
+        curl_close($this->curl);
+    }
 
     function logReq($log_file  = 'req.txt'){
         if ($log_file === true  ||  $log_file === 1){
@@ -127,6 +166,7 @@ class ApiClient
             'encode_body' => $this->encode_body,
             'max_retries' => $this->max_retries,
             'ssl'         => $this->cert_ssl,
+            'cache_path'  => $this->getCachePath()
         ];
     }
 
@@ -143,8 +183,23 @@ class ApiClient
         return $this->request($this->url, $this->verb, $this->body, $this->req_headers, $this->options);
     }
 
+    function debug(){
+        $this->debug = true;        
+		$this->option(CURLOPT_VERBOSE, True);
+        
+        return $this;
+    }
+
+    function setTimeOut(int $value){
+        $this->option(CURLOPT_TIMEOUT, $value); 
+    }
+
+    function setConnectionTimeOut(int $value){
+        $this->option(CURLOPT_CONNECTTIMEOUT, $value); 
+    }
+
     function setUrl($url){
-        $this->url = $url;
+        $this->url = Url::normalize($url);
         return $this;
     }
     
@@ -156,7 +211,23 @@ class ApiClient
     function __construct($url = null)
     {
         $this->setUrl($url);
+        $this->curl = curl_init();
     }
+
+    function useCookieJar(){
+        $this->cookieJar = new CookieJar();
+    }
+    
+	public function setCookieOptions($params = array())
+	{
+		if (is_array($params))
+		{
+			$params = http_build_query($params, '', '&');
+		}
+
+		$this->option(CURLOPT_COOKIE, $params);
+		return $this;
+	}
 
     static function instance($url = null) : ApiClient {
         return new ApiClient($url);
@@ -181,6 +252,11 @@ class ApiClient
 
     function readOnly(bool $flag = true){
         $this->read_only = $flag;
+        return $this;
+    }
+
+    function addHeader($key, $value){
+        $this->req_headers[$key] = $value;
         return $this;
     }
 
@@ -213,20 +289,18 @@ class ApiClient
         return $this;
     }
 
-    function setOptions(Array $options){
-        $this->options = $options;
-        return $this;
-    }
+    function setOptions($options){
+        if (!empty($this->options) && !empty($options)){
+            $this->options = array_merge($this->options, $options);
+        } else {
+            $this->options = $options ?? $this->options ?? null;
+        }
 
-    function addOptions(Array $options){
-        $this->options = array_merge($this->options, $options);
         return $this;
     }
 
     // redirect
     function followLocations($max_redirs = 10){
-        $options = [];
-
         $this->options[CURLOPT_FOLLOWLOCATION] = ($max_redirs > 0);
         $this->options[CURLOPT_MAXREDIRS] = $max_redirs;
 
@@ -256,6 +330,32 @@ class ApiClient
 
     function noDecode(){
         return $this->setDecode(false);
+    }
+
+    function contentType($type){
+        $this->addHeader('Content-Type', $type);
+        return $this;
+    }
+    
+    function accept($type){
+        $this->addHeader('Accept', $type);
+        return $this;
+    }
+
+    function userAgent($str){
+        $this->addHeader('User-Agent', $str);
+        return $this;
+    }
+    
+    // Ej: "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6"
+    function setUserAgent($str){
+        $this->option(CURLOPT_USERAGENT, $str);
+        return $this;
+    }
+
+    function authorization($str){
+        $this->addHeader('Authorization', $str);
+        return $this;
     }
 
     /*
@@ -299,6 +399,7 @@ class ApiClient
         return $this->raw_response;
     }
 
+    // Get Status Code
     function getStatus(){
         return $this->status;
     }
@@ -306,6 +407,11 @@ class ApiClient
     // alias de getStatus()
     function status(){
         return $this->getStatus();
+    }
+
+    function ignoreStatusCodes(array $codes){
+        $this->ignore_status_codes = $codes;
+        return $this;
     }
 
     function getError(){
@@ -327,8 +433,8 @@ class ApiClient
         return $raw ? $this->raw_response : $this->response;
     }
 
-    function getResponse(?bool $decode = null, ?bool $as_array = null){       
-        if ($decode == null){
+    function getResponse($decode = null, $as_array = null){       
+        if ($decode === null){
             $decode = $this->auto_decode;
         }
 
@@ -336,16 +442,22 @@ class ApiClient
             $as_array = true;
         }
 
-        if ($decode){
-            $data = json_decode($this->response, $as_array);
-        } else {
-            $data = $this->response;
-        }   
+        $data = $this->response;
 
+        // dd($this->content_type. 'CONTENT TYPE');        
+
+        if ((!empty($this->content_type) && Strings::startsWith('application/json', $this->content_type)) || ($decode && Strings::isJSON($data))){
+            $data = json_decode($this->response, $as_array);
+        } else 
+        
+        if ((!empty($this->content_type) && Strings::containsAny(['/xml', '+xml'], $this->content_type))  || ($decode && XML::isXML($data))){
+            $data = XML::toArray($data);
+        }
+        
         $res = [
-            'data' => $data,
+            'data'      => $data,
             'http_code' => $this->status,
-            'error' => $this->error
+            'error'     => $this->error
         ];
 
         return $res;
@@ -360,10 +472,8 @@ class ApiClient
         // dejo claro se aplican settings
         $this->cert_ssl = true;
 
-        $this->options = [
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0
-        ];
+        $this->setOption(CURLOPT_SSL_VERIFYHOST, 0);
+        $this->setOption(CURLOPT_SSL_VERIFYPEER, 0);
 
         return $this;
     }
@@ -379,10 +489,8 @@ class ApiClient
         // dejo claro se aplican settings
         $this->cert_ssl = true;
 
-        $this->addOptions([
-            CURLOPT_CAINFO => $crt_path,
-            CURLOPT_CAPATH => $crt_path,
-        ]);
+        $this->setOption(CURLOPT_CAINFO, $crt_path);
+        $this->setOption(CURLOPT_CAPATH, $crt_path);
         
         return $this;
     }
@@ -392,7 +500,7 @@ class ApiClient
         return $this->setSSLCrt($cert_path);
     }
 
-    function consumeAPI(string $url, string $http_verb, $body = null, ?Array $headers = null, ?Array $options = null, $decode = true, $encode_body = true)
+    function consumeAPI(string $url, string $http_verb, $data = null, $headers = null, $options = null, $decode = true, $encode_body = true)
     {
         if (!extension_loaded('curl'))
 		{
@@ -402,7 +510,7 @@ class ApiClient
         if ($headers === null){
             $headers = [];
         } else {
-            if (!Arrays::is_assoc($headers)){
+            if (!Arrays::isAssocc($headers)){
                 $_hs = [];
                 foreach ($headers as $h){
                     list ($k, $v)= explode(':', $h, 2);
@@ -418,51 +526,26 @@ class ApiClient
         }
 
         $keys = array_keys($headers);
-
-        $content_type_found = false;
+        
         foreach ($keys as $key){
             if (strtolower($key) == 'content-type'){
-                $content_type_found = $key;
+                $this->content_type = $key;
                 break;
             }
         }
 
-        $accept_found = false;
-        foreach ($keys as $key){
-            if (strtolower($key) == 'accept'){
-                $accept_found = $key;
-                break;
-            }
+        if ($encode_body && is_array($data)){
+            $data = json_encode($data);
+        } 
+
+        $http_verb  = strtoupper($http_verb);
+
+        if ($this->curl == null){
+            $this->curl = curl_init($url ?? $this->url);
         }
-
-        if (!$content_type_found){
-            $headers = array_merge(
-                [
-                    'Content-Type' => 'application/json'
-                ],
-                ($headers ?? [])
-            );
-        }
-
-        if ($accept_found) {
-            if (Strings::startsWith('text/plain', $headers[$accept_found]) ||
-                Strings::startsWith('text/html', $headers[$accept_found])){
-                $decode = false;
-            }
-        }
-
-        if ($encode_body && is_array($body)){
-            $data = json_encode($body);
-        } else {
-            $data = $body;
-        }
-
-        $curl = curl_init();
-
-        $http_verb = strtoupper($http_verb);
 
         if ($http_verb != 'GET' && !empty($data)){
-            curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($this->curl, CURLOPT_POSTFIELDS, $data);
 
             if ($encode_body){
                 $headers['Content-Length']   = strlen($data);
@@ -478,30 +561,38 @@ class ApiClient
             CURLOPT_HTTPHEADER => $h
         ] + ($options ?? []);
 
-        curl_setopt_array($curl, $options);
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_ENCODING, '' );
-        curl_setopt($curl, CURLOPT_TIMEOUT, 0 );
+        curl_setopt_array($this->curl, $options);
+        curl_setopt($this->curl, CURLOPT_URL, $url);
+        curl_setopt($this->curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($this->curl, CURLOPT_ENCODING, '' );
+        curl_setopt($this->curl, CURLOPT_TIMEOUT, 30); 
+        curl_setopt($this->curl, CURLOPT_CONNECTTIMEOUT, 30);
 
-        curl_setopt($curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1 );
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $http_verb);
+        curl_setopt($this->curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1 );
+        curl_setopt($this->curl, CURLOPT_CUSTOMREQUEST, $http_verb);
 
         // https://stackoverflow.com/a/6364044/980631
-        curl_setopt($curl, CURLOPT_FAILONERROR, false);
-        curl_setopt($curl, CURLOPT_HTTP200ALIASES, [
+        curl_setopt($this->curl, CURLOPT_FAILONERROR, false);
+        curl_setopt($this->curl, CURLOPT_HTTP200ALIASES, [
             400,
             500
         ]);  //
 
+        curl_setopt($this->curl, CURLINFO_HEADER_OUT, true); // 23-abr-2024
 
+         // Agregar manejo de cookies
+        if ($this->cookieJar !== null){
+            curl_setopt($this->curl, CURLOPT_COOKIEJAR,  $this->cookieJar->getCookieFile());
+            curl_setopt($this->curl, CURLOPT_COOKIEFILE, $this->cookieJar->getCookieFile());    
+        }
+ 
         $__headers  = [];
         $__filename = null;
 
-        $header_fn = function ($cURLHandle, $header) use (&$__headers, &$__filename) {
-            $pieces = explode(":", $header);
+        $header_fn = function ($curl_handle, $header) use (&$__headers, &$__filename) {
+            $pieces = explode(":", $header, 2);
 
-            if (count($pieces) >= 2)
+            if (count($pieces) == 2)
                 $__headers[trim($pieces[0])] = trim($pieces[1]);
 
 
@@ -514,20 +605,25 @@ class ApiClient
             return strlen($header); // <-- this is the important line!
         };
 
-        curl_setopt($curl, CURLOPT_HEADERFUNCTION,
+        curl_setopt($this->curl, CURLOPT_HEADERFUNCTION,
             $header_fn
         );
 
-        $response      = curl_exec($curl);
-        $err_msg       = curl_error($curl);
-        $http_code     = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $response      = curl_exec($this->curl);
+        $err_msg       = curl_error($this->curl);
+        $http_code     = (int) curl_getinfo($this->curl, CURLINFO_HTTP_CODE);
 
-        $content_type  = curl_getinfo($curl,CURLINFO_CONTENT_TYPE);
-        $effective_url = curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
+        $content_type  = curl_getinfo($this->curl,CURLINFO_CONTENT_TYPE);
+        $effective_url = curl_getinfo($this->curl, CURLINFO_EFFECTIVE_URL);
 
-        curl_close($curl);
+        // Guardar las cookies después de cada solicitud
+        if ($this->cookieJar !== null){
+            // Obtener información sobre las cookies antes de cerrar la sesión cURL
+            $cookie_info   = curl_getinfo($this->curl, CURLINFO_COOKIELIST);
 
-
+            $this->cookieJar->saveCookies($cookie_info);
+        }
+            
         // Preservo la respuesta
         $this->raw_response = $response;
 
@@ -547,8 +643,12 @@ class ApiClient
         return $ret;
     }
 
-    function getHeaders(){
+    function getRequestHeaders(){
         return $this->req_headers;
+    }
+
+    function getHeaders(){
+        return $this->res_headers;
     }
 
     function getContentType(){
@@ -559,11 +659,17 @@ class ApiClient
         return $this->effective_url;
     }
 
-    function request(string $url, string $http_verb, $body = null, ?Array $headers = null, ?Array $options = null){
-        static $prev_hosts;
+    function request(string $url, string $http_verb, $body = null, $headers = null, $options = null){
+        static $access;
+        
+        $domain = Url::getHostname($url);
 
-        if ($prev_hosts === null){
-            $prev_hosts = [];
+        if (isset(Config::get()['sleep_time'])){
+            if ($access === null){
+                $access = [
+                    $domain => time()
+                ];
+            }
         }
 
         if ($this->mocked){
@@ -578,14 +684,20 @@ class ApiClient
             }
         }
 
-        $this->url  = $url;
+        if ($this->debug){
+            dd($url, 'URL');
+        }
+
+        $this->setUrl($url);
         $this->verb = strtoupper($http_verb);
+
+        $this->req_body = $body;
         
         //
         // Sino se aplico nada sobre SSL, vale lo que diga el config
         // 
         if (!$this->cert_ssl){    
-            $cert = config()['ssl_cert'];
+            $cert = Config::get()['ssl_cert'];
             
             if ($cert === false){
                 $this->disableSSL();
@@ -603,7 +715,10 @@ class ApiClient
         }
 
         $body    = $body    ?? $this->body    ?? null;
-        $headers = $headers ?? $this->req_headers ?? null;        
+        $headers = $headers ?? $this->req_headers ?? null;    
+        
+        // Para dump()
+        $this->body = $body;
     
         if ($this->expiration == null){
             $expired = true;
@@ -616,6 +731,12 @@ class ApiClient
 
         if ($this->log_req){
             Logger::{$this->logger_fn}(static::dump(), $this->log_req);
+        }
+
+        if ($this->show_req){
+            dd(
+                $this->dump()
+            );
         }
 
         if (!$expired){
@@ -646,21 +767,19 @@ class ApiClient
             }
         }
 
-        $domain = Url::getHostname($url);
-
-        if (isset(config()['sleep_time'])){
+        if (isset(Config::get()['sleep_time'])){
             /*
                 Solo si se ha solicitado antes (en principio en el mismo request),
                 hago la pausa
 
-                En vez de usar $prev_hosts como variable estatica deberia ser 
+                En vez de usar $access como variable estatica deberia ser 
                 con uso de transcientes
 
                 Tambien deberia guardarse y tomarse en cuenta cuando fue la ultima
                 solicitud http a ese dominio
             */
-            if (isset($prev_hosts[$domain])){
-                nap(config()['sleep_time'], true);
+            if ($access[$domain] + 1000000 < microtime()){
+                nap(Config::get()['sleep_time'], true);
             } 
         }
 
@@ -700,7 +819,7 @@ class ApiClient
             $ok = empty($this->error);
             $retries++;
 
-            $prev_hosts[ $domain ] = true;
+            $access[ $domain ] = time();
             //d($ok ? 'ok' : 'fail', 'INTENTOS: '. $retries);
         }
 
@@ -714,14 +833,23 @@ class ApiClient
 
         $status_code = (int) $this->status;
 
-        if ($this->expiration && $res !== null && !$this->read_only && ($status_code >=200 && $status_code < 400)) {
-            $this->saveResponse($res);
-        }
+        if ($this->expiration && $res !== null && !$this->read_only){
+            if (!empty($this->ignore_status_codes)){
+                foreach ($this->ignore_status_codes as $code){
+                    if ($status_code == $code){
+                        $this->saveResponse($res);
+                        break;
+                    }
+                }
+            } else if ($status_code >=200 && $status_code < 400){
+                $this->saveResponse($res);
+            }            
+        }       
 
         return $this;
     }
 
-    function get($url = null, ?Array $headers = null, ?Array $options = null){    
+    function get($url = null, $headers = null, $options = null){    
         $url = $this->url ?? $url;
 
         if ($url === null){
@@ -731,7 +859,7 @@ class ApiClient
         return $this->request($url, 'GET', null, $headers, $options);
     }
 
-    function delete($url = null, ?Array $headers = null, ?Array $options = null){
+    function delete($url = null, $headers = null, $options = null){
         $url = $this->url ?? $url;
 
         if ($url === null){
@@ -741,8 +869,9 @@ class ApiClient
         return $this->request($url, 'DELETE', null, $headers, $options);
     }
 
-    function post($url = null, $body = null, ?Array $headers = null, ?Array $options = null){
-        $url = $this->url ?? $url;
+    function post($url = null, $body = null, $headers = null, $options = null){
+        $url  = $this->url ?? $url;
+        $body = $body      ?? $this->body ?? null;
 
         if ($url === null){
             throw new \InvalidArgumentException("Param url is needed. Set in " . __METHOD__ . "() or constructor or setUrl()");
@@ -751,7 +880,7 @@ class ApiClient
         return $this->request($url, 'POST', $body, $headers, $options);
     }
 
-    function put($url = null, $body = null, ?Array $headers = null, ?Array $options = null){
+    function put($url = null, $body = null, $headers = null, $options = null){
         $url = $this->url ?? $url;
 
         if ($url === null){
@@ -761,7 +890,7 @@ class ApiClient
         return $this->request($url, 'PUT', $body, $headers, $options);
     }
 
-    function patch($url = null, $body = null, ?Array $headers = null, ?Array $options = null){
+    function patch($url = null, $body = null, $headers = null, $options = null){
         $url = $this->url ?? $url;
 
         if ($url === null){
@@ -782,18 +911,12 @@ class ApiClient
         return $this;
     }
 
-    function send($url = null, $body = null, ?Array $headers = null, ?Array $options = null){
+    function send($url = null, $body = null, $headers = null, $options = null){
         return $this->request($url ?? $this->url, $this->verb, $body, $headers, $options);
     }
 
     function getBody(){
         return $this->data();
-    }
-
-    // Ej: "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6"
-    function setUserAgent(string $webbrowser){
-        $this->option(CURLOPT_USERAGENT, $webbrowser);
-        return $this;
     }
     
     // Para descargar archivos binarios
@@ -812,14 +935,17 @@ class ApiClient
         ->setBinary()
         ->withoutStrictSSL();
 
-        $bytes = $cli->downloadZipFile(ETC_PATH . 'file.zip');
+        $bytes = $cli->download();
 
         dd($bytes, 'BYTES escritos');
     */
     function download($filepath, $url = null, $body = null, $headers = null, $options = null)
     {   
         $fp = fopen($filepath, 'w+');
-        $ch = curl_init($url ?? $this->url);
+
+        if ($this->curl == null){
+            $this->curl = curl_init($url ?? $this->url);
+        }
    
         $this->setOption(CURLOPT_RETURNTRANSFER, false);
         $this->setOption(CURLOPT_FILE, $fp);
@@ -832,13 +958,13 @@ class ApiClient
             }
         }
 
-        $this->url  = $url;
+        $this->url = $url;
 
         //
         // Sino se aplico nada sobre SSL, vale lo que diga el config
         // 
         if (!$this->cert_ssl){    
-            $cert = config()['ssl_cert'];
+            $cert = Config::get()['ssl_cert'];
             
             if ($cert === false){
                 $this->disableSSL();
@@ -859,25 +985,25 @@ class ApiClient
         $headers = $headers ?? $this->req_headers ?? null;        
     
         if (!empty($this->options)){
-            foreach ($this->options as $curl_op => $value){
-                curl_setopt($ch, $curl_op, $value);
+            foreach ($this->options as $_op => $value){
+                curl_setopt($this->curl, $_op, $value);
             }    
         }
         
-        curl_exec($ch);
+        curl_exec($this->curl);
 
         // if (!empty($this->header_callback)){
-        //     curl_setopt($ch, CURLOPT_HEADERFUNCTION, $this->header_callback);
+        //     curl_setopt($this->curl, CURLOPT_HEADERFUNCTION, $this->header_callback);
         // }
 
-        $response      = curl_exec($ch);
-        $err_msg       = curl_error($ch);
-        $http_code     = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $response      = curl_exec($this->curl);
+        $err_msg       = curl_error($this->curl);
+        $http_code     = (int) curl_getinfo($this->curl, CURLINFO_HTTP_CODE);
 
-        $content_type  = curl_getinfo($ch,CURLINFO_CONTENT_TYPE);
-        $effective_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        $content_type  = curl_getinfo($this->curl,CURLINFO_CONTENT_TYPE);
+        $effective_url = curl_getinfo($this->curl, CURLINFO_EFFECTIVE_URL);
    
-        curl_close($ch);
+        // curl_close($this->curl);
         fclose($fp);
 
         $this->response      = $response;
@@ -894,10 +1020,10 @@ class ApiClient
     */
 
     // BASIC
-    function setBasicAuth($username, $password){
-        $this->setHeaders([
-            'Authorization: Basic '. base64_encode("$username:$password")
-        ]);
+    function setBasicAuth($username = null, $password = null){
+        $username = $username ?? $this->username;
+        $password = $password ?? $this->password;
+        $this->addHeader('Authorization', 'Basic '. base64_encode("$username:$password"));
 
         return $this;
     }
@@ -923,15 +1049,24 @@ class ApiClient
         Debe generar un HASH con todos los parametros y sino son iguales... se considera otra cache
     */
 
-    function getCachePath(){
+    function getCachePath() : string {
         if (empty($this->url)){
             throw new \Exception("Undefined URL");
         }
 
-        return FileCache::getCachePath($this->url);
+        $input = str_replace(['https://', 'http://'], '', $this->url);
+
+        if ($this->cache_post_request && $this->verb == 'POST'){
+            $input .= "+body={$this->req_body}";
+        }
+
+        $full_path = FileCache::getCachePath($input);
+
+        return $full_path;
     }
 
-	protected function saveResponse(Array $response){
+	protected function saveResponse(Array $response)
+    {
         if ($this->cache_post_request === false && $this->verb != 'GET'){
             return;
         }
@@ -953,6 +1088,10 @@ class ApiClient
         }
 
         if (file_exists($path)){
+            if ($this->debug){
+                dd($path, 'CACHE PATH');
+            }
+
             return include $path;
         }
     }
@@ -989,25 +1128,8 @@ class ApiClient
 		$url .= $file_path;
 
 		//$this->option(CURLOPT_BINARYTRANSFER, TRUE);
-		$this->option(CURLOPT_VERBOSE, TRUE);
 
 		return $this->get();
-	}
-
-	/* =================================================================================
-	 * ADVANCED METHODS
-	 * Use these methods to build up more complex queries
-	 * ================================================================================= */
-
-	public function setCookies($params = array())
-	{
-		if (is_array($params))
-		{
-			$params = http_build_query($params, '', '&');
-		}
-
-		$this->option(CURLOPT_COOKIE, $params);
-		return $this;
 	}
 
 	public function httpHeader($header, $content = NULL)
@@ -1047,5 +1169,6 @@ class ApiClient
 		return function_exists('curl_init');
 	}
 }
+
 
 

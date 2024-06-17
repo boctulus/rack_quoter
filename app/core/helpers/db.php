@@ -1,12 +1,76 @@
 <?php
 
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\DB;
 use boctulus\SW\models\MyModel;
-use boctulus\SW\core\libs\Files;
 use boctulus\SW\core\libs\Model;
+use boctulus\SW\core\libs\Logger;
 use boctulus\SW\core\libs\StdOut;
 use boctulus\SW\core\libs\Strings;
-use boctulus\SW\controllers\MakeControllerBase;
+use boctulus\SW\controllers\MigrationsController;
+use boctulus\SW\core\controllers\MakeControllerBase;
+
+/*
+    @param Array ...$args por ejemplo "--dir=$folder", "--to=$tenant"
+*/
+function migrate(bool $show_response = true, ...$args){
+    $mgr = new MigrationsController();
+
+    if (!$show_response){
+        StdOut::hideResponse();
+    }
+
+    $mgr->migrate(...$args);
+}
+
+/*
+    Ej:
+
+    enqueue_data([        
+        'user_id' => $user_id
+    ]);
+*/
+function enqueue_data($data, $category = null) {
+    $tb = (object) table("queue");
+
+    $tb->insert([
+        'category' => $category,
+        'data'     => json_encode($data)
+    ]);
+}
+
+/*
+    Ej:
+
+    $row     = deque_data();
+
+    $user_id = $row['user_id'];
+    // ....
+*/
+function deque_data($category = null, bool $full_row = false) {
+    $tb = (object) table("queue");
+
+    $row = $tb
+    ->when(!empty($category), function ($q) use ($category) {
+        $q->where(["category" => $category]);
+    })
+    ->orderBy([
+        'id' => 'asc'
+    ])
+    ->getOne();
+    
+    if (empty($row)){
+        return false;
+    }
+
+    $id          = $row['id'];
+    $row['data'] = json_decode($row['data'], true);
+
+    $tb = (object) table("queue");
+    $tb->where(['id' => $id])->delete();
+
+    return $full_row ? $row : $row['data'];
+}
 
 function log_db_truncate(){
     DB::statement("TRUNCATE `mysql`.`general_log`");
@@ -17,12 +81,14 @@ function log_db_dump(bool $to_file = false){
 
     DB::statement("USE `mysql`;");
 
-    $rows = table('general_log')
-    ->removePrefix(get_db_prefix())
+    $m = (object) table('general_log');
+
+    $rows = $m
+    ->removePrefix(DB::getTablePrefix())
     ->get();
 
     if ($to_file){
-        Logger::dump($rows, 'sql_log.txt');
+        Logger::dd($rows, 'sql_log.txt');
     }
 
     return $rows;
@@ -77,20 +143,22 @@ function get_default_connection_id(){
 
 function get_default_database_name(){
     $def_con = get_default_connection_id();
-    return config()['db_connections'][$def_con]['db_name'];
+    return Config::get()['db_connections'][$def_con]['db_name'];
 }
 
 /*
     Similar to DB::table() but schema is not loaded so no validations are performed
+
+    @return object $obj
 */
-function table(string $tb_name){
+function table(string $tb_name) {
     return (new MyModel(true))->table($tb_name);
 }
 
 function get_users_table(){
     global $wpdb;
 
-    return $wpdb . 'users';
+    return $wpdb->prefix . 'users';
 }
 
 function get_model_namespace($tenant_id = null){
@@ -98,8 +166,8 @@ function get_model_namespace($tenant_id = null){
         $tenant_id = DB::getCurrentConnectionId(true);
     }   
 
-    if ($tenant_id == config()['db_connection_default']){
-        $extra = config()['db_connection_default'] . '\\';
+    if ($tenant_id == Config::get()['db_connection_default']){
+        $extra = Config::get()['db_connection_default'] . '\\';
     } else {
         $group = DB::getTenantGroupName($tenant_id);
 
@@ -118,8 +186,8 @@ function get_model_name($table_name, $tenant_id = null){
         $tenant_id = DB::getCurrentConnectionId(true);
     }   
 
-    if ($tenant_id == config()['db_connection_default']){
-        $extra = config()['db_connection_default'] . '\\';
+    if ($tenant_id == Config::get()['db_connection_default']){
+        $extra = Config::get()['db_connection_default'] . '\\';
     } else {
         $group = DB::getTenantGroupName($tenant_id);
 
@@ -163,8 +231,8 @@ function get_schema_path($table_name = null, $tenant_id = null){
         return $schema_paths[$tenant_id][$_table_name];
     }
 
-    if ($tenant_id == config()['db_connection_default']){
-        $extra = config()['db_connection_default'] . '/';
+    if ($tenant_id == Config::get()['db_connection_default']){
+        $extra = Config::get()['db_connection_default'] . '/';
     } else {
         $group = DB::getTenantGroupName($tenant_id);
 
@@ -190,8 +258,8 @@ function get_schema_name($table_name, $tenant_id = null){
         $tenant_id = DB::getCurrentConnectionId();
     }   
 
-    if ($tenant_id == config()['db_connection_default']){
-        $extra = config()['db_connection_default'] . '\\';
+    if ($tenant_id == Config::get()['db_connection_default']){
+        $extra = Config::get()['db_connection_default'] . '\\';
     } else {
         $group = DB::getTenantGroupName($tenant_id);
 
@@ -376,7 +444,7 @@ function is_mul_rel_cached(string $t1, string $t2, ?string $relation_str = null 
         return is_mul_rel($t1, $t2, $relation_str, $tenant_id);
     }
 
-    $def_conn_id = config()['db_connection_default'];
+    $def_conn_id = Config::get()['db_connection_default'];
 
     if ($tenant_id == $def_conn_id){
         $folder = $def_conn_id . '/';

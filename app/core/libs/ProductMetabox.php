@@ -60,5 +60,9 @@ class ProductMetabox extends Metabox
 {
     protected $screen = 'product';
 
+    function __construct(Array $meta_atts){
+        parent::__construct($meta_atts, $this->screen);
+    }
 }
+
 

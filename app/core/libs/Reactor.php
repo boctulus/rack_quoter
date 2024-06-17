@@ -3,132 +3,146 @@
 namespace boctulus\SW\core\libs;
 
 /*
-   	@author Pablo Bozzolo (2020-2022)
+   	@author Pablo Bozzolo (2023)
+
+	Reacciona a la creacion, modificacion, borrado y restauracion de posts
+	incluidos Custom Post Types
+
+	NO funciona con otras tablas como las de Users 
+
+	Para Users extender UserReactor en su lugar
 */
 
 abstract class Reactor
 {
 	protected $action;
+	protected $type;
+	protected $ignored_types = [];
 
-	function __construct()
+	function __construct($type = null)
 	{
-		add_action('woocommerce_update_product', [$this, 'sync_on_product_update'], 10, 2 );
-		add_action('added_post_meta', [$this, 'sync_on_new_post_data'], 10, 4 );
-		add_action('untrash_post', [$this, 'sync_on_untrash_post'], 10, 1);
+		if ($type != null){
+			$this->type = $type;
+		}		
+		
+		add_action('publish_post',       [$this, 'sync_on_create'], 10, 1 );
+		add_action('save_post',          [$this, 'sync_on_update'], 10, 1 );
+		add_action('before_delete_post', [$this, 'sync_on_trash'], 10, 1);
+		add_action('untrash_post',       [$this, 'sync_on_untrash'], 10, 1);
 	}	
 
-    /*
-		Event Hooks
-	*/
+	protected function __get_pid($input)
+    {
+        if (empty($input)){
+            return null;
+        }
+
+        if (is_numeric($input)){
+            return $input;
+        }
+    
+        $input_data = json_decode($input, true);
+
+        if ($input_data !== null) {
+            return Strings::match($input_data, '/post_id=([\d]+)/');
+        } else {
+            return null;
+        }
+    }
+
+	function sync_on_create($pid) {
+		$post_type = get_post_type($pid);
+
+		if ($this->type !== null && $this->type != $post_type){
+			return;
+		}
+
+		if (in_array($post_type, $this->ignored_types)){
+			return;
+		}
+
+		$this->action = 'create';
 	
-	protected function __onCreate($pid, $sku, $product){		
-		if (!empty(get_transient('product-'. $pid))){
-			return;
-		}
-		
-		set_transient('product-'. $pid, true, 2);
-
-		if (is_admin()){
-			$sku = $_POST['_sku'] ?? null;
-			if ($sku === ''){
-				if (session_status() === PHP_SESSION_NONE) {
-					session_start();
-				}
-
-				$_SESSION['reactor-notice'] = 'SKU ausente';
-			} else {
-				$_SESSION['reactor-notice'] = '';
-			}
-		}
-
-        $this->onCreate($pid, $sku, $product);
+		$this->__onCreate($this->__get_pid($pid));
 	}
 
-	protected function __onUpdate($pid, $sku, $product)
-	{
-		if (!empty(get_transient('product-'. $pid))){
+	function sync_on_update($pid) {
+		$post_type = get_post_type($pid);
+
+		if ($this->type !== null && $this->type != $post_type){
 			return;
 		}
 
-		set_transient('product-'. $pid, true, 2);	
+		if (in_array($post_type, $this->ignored_types)){
+			return;
+		}
 
-        $this->onUpdate($pid, $sku, $product);
-	}
-
-	protected function __onDelete($pid, $sku, $product)
-	{
-        $this->onDelete($pid, $sku, $product);
-	}
-
-	protected function __onRestore($pid, $sku, $product)
-	{	
-        $this->onRestore($pid, $sku, $product);
-	}
-
-
-	abstract function onCreate ($pid, $sku, $product);
-	abstract function onUpdate ($pid, $sku, $product);
-	abstract function onDelete ($pid, $sku, $product);
-	abstract function onRestore($pid, $sku, $product);
-
-
-	function sync_on_product_update($pid, $product) {
 		$this->action = 'edit';
-
-		$product = wc_get_product($pid);
-		$sku     = $product->get_sku();
-		
-		$this->__onUpdate($pid, $sku, $product);
+	
+		$this->__onUpdate($this->__get_pid($pid));
 	}
 
-	function sync_on_untrash_post($pid){
-		if (get_post_type($pid) != 'product'){
+	function sync_on_trash($pid)
+	{
+		$post_type = get_post_type($pid);
+
+		if ($this->type !== null && $this->type != $post_type){
+			return;
+		}
+
+		if (in_array($post_type, $this->ignored_types)){
+			return;
+		}
+
+		$this->action = 'trash';
+		
+		$this->__onDelete($this->__get_pid($pid));
+	}
+
+	function sync_on_untrash($pid)
+	{
+		$post_type = get_post_type($pid);
+
+		if ($this->type !== null && $this->type != $post_type){
+			return;
+		}
+
+		if (in_array($post_type, $this->ignored_types)){
 			return;
 		}
 
 		$this->action = 'untrash';
 		
-		$product = wc_get_product($pid);
-		$sku     = $product->get_sku();
-
-		$this->__onRestore($pid, $sku, $product);
+		$this->__onRestore($this->__get_pid($pid));
 	}
 
-	function sync_on_new_post_data($meta_id, $post_id, $meta_key, $meta_value) {  
-		if (get_post_type($post_id) == 'product') 
-		{ 
-			// si ya lo cogió el otro hook
-			if ($this->action == 'edit'){
-				return;
-			}
-
-			//  draft y otros no me interesan
-			if ($meta_value != 'publish'){
-				return;
-			}
-
-			$product = wc_get_product( $post_id );
-			$sku     = $product->get_sku();
-
-			switch ($meta_key){
-				case '_wp_trash_meta_status': 
-					$this->action = 'trash';
-					$this->__onDelete($post_id, $sku, $product);
-					break;
-				case '_wp_old_slug':
-					$this->action = 'restore';
-					$this->__onRestore($post_id, $sku, $product);
-					break;
-				case '_stock':
-					$this->action = 'edit';
-					$this->__onUpdate($post_id, $sku, $product);
-					break;
-				// creación
-				default:
-					$this->action = 'create';
-					$this->__onCreate($post_id, $sku, $product);
-			}
-		}
+    /*
+		Event Hooks
+	*/
 	
+	protected function __onCreate($pid){	
+        $this->onCreate($pid);
 	}
+
+	protected function __onUpdate($pid)
+	{
+        $this->onUpdate($pid);
+	}
+
+	protected function __onDelete($pid)
+	{
+        $this->onDelete($pid);
+	}
+
+	protected function __onRestore($pid)
+	{	
+        $this->onRestore($pid);
+	}
+
+
+	function onCreate ($pid){}
+	function onUpdate ($pid){}
+	function onDelete ($pid){}
+	function onRestore($pid){}
+
 }

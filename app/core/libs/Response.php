@@ -27,7 +27,7 @@ class Response
 
 
     protected function __construct() { 
-        static::$config = config();
+        static::$config = Config::get();
         static::$pretty = static::$config['pretty'] ?? false;
     }
 
@@ -124,6 +124,8 @@ class Response
         }    
 
         if (static::$as_object || is_object($data) || is_array($data)) {
+            header('Content-Type: application/json; charset=utf-8');
+            
             $arr = [];
 
             $paginator_position = @static::$config['paginator']['position'] ?? 'BOTTOM';
@@ -336,7 +338,7 @@ class Response
                     'location'  => static::$data['error']['location'] ?? '',
                     'message'   => static::$data['error']['message'] ?? '',
                     'detail'    => static::$data['error']['detail'] ?? '',
-                ], 'tpl_basic.php');
+                ]);
 
             } else {
                 $message  = static::$data['error']['message'] ?? '--';

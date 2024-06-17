@@ -1,8 +1,10 @@
 <?php
 
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Url;
 
-$cfg  = include __DIR__ . '/../config/config.php';
+
+$cfg  = Config::get();
 
 $dims = $cfg['dims'];
 

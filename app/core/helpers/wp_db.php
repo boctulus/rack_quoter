@@ -6,7 +6,7 @@ function db_instance(){
     return $wpdb;
 }
 
-function db_prefix(){
+function tb_prefix(){
     global $wpdb;
 
     return $wpdb->prefix;
@@ -16,7 +16,7 @@ function db_prefix(){
     Es una aproximacion
 */
 function db_prefix_replace(string $sql){
-    $prefix = db_prefix();
+    $prefix = tb_prefix();
 
     return str_replace("wp_", $prefix, $sql);
 }

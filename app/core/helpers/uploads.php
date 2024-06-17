@@ -1,7 +1,9 @@
 <?php
 
+use boctulus\SW\core\libs\Config;
+
 function set_upload_limits($upload_max_filesize = '1024M', $post_max_size = '1024M', $memory_limit = '768M', $max_exec_time = '600'){
-    $config = config();
+    $config = Config::get();
 
     @ini_set("upload_max_filesize",   $upload_max_filesize ?? $config["upload_max_filesize"] ?? "1024M");
     @ini_set("post_max_size",  $post_max_size ?? $config["post_max_size"] ?? $upload_max_filesize);

@@ -2,15 +2,24 @@
 
 namespace boctulus\SW\core\libs;
 
+use boctulus\SW\core\libs\Arrays;
 use boctulus\SW\core\libs\Strings;
+
+use boctulus\SW\core\traits\ProductCategoriesTrait; 
 
 /*
     Product utility class
 
-    Investigar '_transient_wc_attribute_taxonomies' como option_name en wp_options
+    TO-DO
+
+    - Investigar '_transient_wc_attribute_taxonomies' como option_name en wp_options
+
+    - Debe existir siempre una versio de cada metodo con &$product por eficiencia
 */
 class Products extends Posts
 {
+    use ProductCategoriesTrait;
+
     static $post_type   = 'product';
     static $cat_metakey = 'product_cat';
 
@@ -143,13 +152,28 @@ class Products extends Posts
         return $arr;
     }
         
-    static function getProduct($product){
-        $p =  is_object($product) ? $product : \wc_get_product($product);
-        return $p;
+    /*
+        @param int|object $product
+        @param string $return_type que pueede ser 'OBJECT' o 'ARRAY' 
+
+    */
+    static function getProduct($product, string $return_type = 'OBJECT'){
+        $ret =  is_object($product) ? $product : \wc_get_product($product);
+
+        if ($return_type == 'ARRAY'){
+            $ret = $ret->get_data();
+        }
+        
+        return $ret;
+    }
+
+    static function getProductById($pid){
+        return \wc_get_product($pid);
     }
 
     /*
         A futuro podria reemplazar a dumpProduct() 
+
         pero implicaria modificar createProduct() para que pueda leer este otro formato.
     */
     static function getAllProducts($status = false, bool $as_array = false){
@@ -187,6 +211,39 @@ class Products extends Posts
         return $prods_ay;
     }
 
+    /*
+        Ej:  // controlador //
+
+        function get($sku = null)
+        {
+            if (empty($sku)){
+                $limit  = $_GET['limit']  ?? 10;
+                $offset = $_GET['offset'] ?? null;
+                $order  = $_GET['order']  ?? ['id' => 'DESC'];
+
+                $pids = Products::getProductIds('publish', $limit, $offset, null, $order);
+
+                $data = [];
+                foreach ($pids as $pid){
+                    $data['products'][] = Products::dumpProduct($pid);
+                }
+            } else {
+                $pid  = Products::getIdBySKU($sku);
+                $data = Products::dumpProduct($pid);
+            }   
+
+            $data = json_encode($data, JSON_UNESCAPED_SLASHES);
+            $data = str_replace("\r\n", '', $data);
+
+            header('Content-Type: application/json; charset=utf-8');
+
+            return $data;
+        }
+    */
+    static function getProductIds($post_status = null, $limit = null, $offset = null, $attributes = null, $order_by = null){
+        return static::getIDs('product', $post_status, $limit, $offset, $attributes, $order_by);
+    }
+
     static function searchProduct($keywords, $attributes = null, $select = '*', $post_status = null, $limit = null, $offset = null){
         return parent::search(
             $keywords,
@@ -200,30 +257,163 @@ class Products extends Posts
         );
     }
 
-    static function getProductPropertiesBySKU($sku){
-        $result_ay = static::getByMeta('SKU', $sku);
+    /*
+        Ej:
 
-        if (empty($result_ay)){
-            return;
-        }
-
-        return $result_ay[0];
+        $pids = Products::searchProductByLike('%MODELO NO DISPONIBLE EN STOCK%', null, 'ID');
+    */
+    static function searchProductByLike($keywords, $attributes = null, $select = '*', $post_status = null, $limit = null, $offset = null){
+        return parent::searchByLike(
+            $keywords,
+            $attributes,
+            $select,
+            true,
+            'product',
+            $post_status,
+            $limit,
+            $offset
+        );
     }
 
-    static function getProductIDBySKU($sku, $post_status = null){
-        $pid = wc_get_product_id_by_sku($sku);
-    
-        if ($pid != null){
-            return $pid;
+    static function getPostIDsContainingMeta($meta_key, $prepend = false)
+    {
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
         }
+
+        return parent::getPostIDsContainingMeta($meta_key);
+    }
+
+    /*
+        Retorna post(s) contienen determinado valor en una meta_key
+    */
+    static function getPostsByMeta($meta_key, $meta_value, $post_type = null, $post_status = 'publish', bool $prepend = false)
+    {
+        global $wpdb;
+
+        if ($post_type == null) {
+            $post_type = static::$post_type;
+        }
+
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
+        }
+
+        /*
+            SELECT COUNT(*) FROM wp_postmeta pm
+            LEFT JOIN wp_posts p ON p.ID = pm.post_id 
+            WHERE p.post_type = 'product' 
+            AND pm.meta_key = '_forma_farmaceutica' 
+            AND pm.meta_value='crema'
+            AND p.post_status = 'publish'
+            ;
+        */
+
+        $sql = "SELECT * FROM {$wpdb->prefix}postmeta pm
+            LEFT JOIN {$wpdb->prefix}posts p ON p.ID = pm.post_id 
+            WHERE  
+            pm.meta_key = '%s' 
+            AND pm.meta_value='%s'";
+
+        $sql_params = [$meta_key, $meta_value];
+
+        if ($post_type !== null) {
+            $sql .= " AND p.post_type = '%s'";
+            $sql_params[] = $post_type;
+        }
+
+        if ($post_status !== null) {
+            $sql .= " AND p.post_status = '%s'";
+            $sql_params[] = $post_status;
+        }
+
+        // dd($sql);
+
+        $r = $wpdb->get_results($wpdb->prepare($sql, ...$sql_params));
+
+        return $r;
+    }
     
-        $result_ay = static::getByMeta('SKU', $sku, 'product', $post_status);
-    
-        if (empty($result_ay)){
+    /*
+        Retorna la cantidad de posts contienen determinado valor en una meta_key
+    */
+    static function countByMeta($meta_key, $meta_value, $post_type = null, $post_status = 'publish', bool $prepend = false)
+    {
+        global $wpdb;
+
+        if ($post_type == null) {
+            $post_type = static::$post_type;
+        }
+
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
+        }
+
+        /*
+            SELECT COUNT(*) FROM wp_postmeta pm
+            LEFT JOIN wp_posts p ON p.ID = pm.post_id 
+            WHERE p.post_type = 'product' 
+            AND pm.meta_key = '_forma_farmaceutica' 
+            AND pm.meta_value='crema'
+            AND p.post_status = 'publish'
+            ;
+        */
+
+        $sql = "SELECT COUNT(*) FROM {$wpdb->prefix}postmeta pm
+            LEFT JOIN {$wpdb->prefix}posts p ON p.ID = pm.post_id 
+            WHERE  
+            pm.meta_key = '%s' 
+            AND pm.meta_value='%s'";
+
+        $sql_params = array($meta_key, $meta_value);
+
+        if ($post_type !== null) {
+            $sql .= " AND p.post_type = %s";
+            $sql_params[] = $post_type;
+        }
+
+        if ($post_status !== null) {
+            $sql .= " AND p.post_status = %s";
+            $sql_params[] = $post_status;
+        }
+
+        $r = (int) $wpdb->get_var($wpdb->prepare($sql, ...$sql_params));
+
+        return $r;
+    }
+
+
+    /*
+        Recupera el/los ID(s) de producto dado el SKU
+        
+        En caso de que la DB este corrupta y admita dos productos con el mismo SKU,
+        devolvera un array con los IDs
+    */
+    static function getProductIDBySKU($sku, $post_status = null){
+        global $wpdb;
+
+        $sql = "SELECT pm.post_id
+        FROM {$wpdb->prefix}postmeta pm
+        INNER JOIN {$wpdb->prefix}posts p ON pm.post_id = p.ID
+        WHERE pm.meta_key = '_sku'
+        AND pm.meta_value = %s";
+
+        $params = [ $sku ]; 
+
+        if (!empty($post_status)) {
+            $sql .= " AND post_status = %s";
+            $params[] = $post_status;
+        }
+
+        $query = $wpdb->prepare($sql, ...$params);
+        
+        $product_ids = $wpdb->get_col($query);
+
+        if (empty($product_ids)){
             return;
         }
     
-        return $result_ay[0]['ID'];
+        return count($product_ids) == 1 ? $product_ids[0] : $product_ids;
     }    
 
     static function getProductBySKU($sku){
@@ -258,7 +448,7 @@ class Products extends Posts
         return $p->get_price();
     }
 
-    static function setStock($product_id, $qty)
+    static function setStock($product_id, $qty, bool $update_visibility = false)
     {
         $qty = (int) $qty;
 
@@ -267,13 +457,27 @@ class Products extends Posts
         static::setMeta($product_id, '_stock', $qty);
 
         // 2. Updating the stock quantity
-        update_post_meta( $product_id, '_stock_status', $stock_staus);
+        update_post_meta($product_id, '_stock_status', $stock_staus);
 
-        // 3. Updating post term relationship
-        wp_set_post_terms( $product_id, $stock_staus, 'product_visibility', true );
+        if ($update_visibility){
+            wp_set_post_terms( $product_id, $stock_staus, 'product_visibility', true );
+        }
+    }
 
-        // And finally (optionally if needed)
-        wc_delete_product_transients( $product_id ); // Clear/refresh the variation cache
+    // Tiene sentido ->save() en este caso ?
+    static function setStockStatus($product_id, $stock_status, bool $save = true)
+    {
+        if (!in_array($stock_status, ['instock', 'outofstock'])){
+            throw new \InvalidArgumentException("Invalid stock_status '$stock_status'");
+        }
+
+        $p = \wc_get_product($product_id);
+
+        $p->set_stock_status($stock_status);
+
+        if ($save){
+            $p->save();
+        }
     }
 
     static function getStock($product)
@@ -331,6 +535,44 @@ class Products extends Posts
     }
 
     /*
+        Setea precios
+    */
+    static function setPrices(&$product, $args, $allow_zero_for_sale_price = false, bool $format_money = true)
+    {
+        $price = $args['price'] ?? $args['display_price'] ?? null;
+
+        if ($price !== null){
+            if ($format_money){
+                $price = static::formatMoney($price);
+            }
+            
+            $product->set_price($price);
+        }
+        
+        // precio sin descuentos
+        $regular_price = $args['regular_price'] ?? $args['price'] ?? null;
+
+        if ($regular_price !== null && $regular_price !== 0){
+            if ($format_money){
+                $regular_price = static::formatMoney($regular_price);
+            }
+
+            $product->set_regular_price($regular_price);
+        }
+
+        if (isset($args['sale_price'])){
+            if ($allow_zero_for_sale_price || (!$allow_zero_for_sale_price && $args['sale_price'] != 0)){
+
+                if ($format_money){
+                    $args['sale_price'] = static::formatMoney($args['sale_price']);
+                }
+                
+                $product->set_sale_price($args['sale_price']);
+            }
+        }
+    }
+
+    /*
         Setea cantidades de 9999 para todos los productos a fines de poder hacer pruebas
     */
     static function setHighAvailability($pid = null){
@@ -341,7 +583,7 @@ class Products extends Posts
         }
 
         foreach($pids as $pid){
-            static::setStock($pid, 9999);
+            static::setStock($pid, 99999);
         }   
     }
 
@@ -375,7 +617,7 @@ class Products extends Posts
         return static::setStatus($pid, 'trash');
     }
 
-    static function getAttributeValuesByProduct($product, $attr_name){
+    static function getAttributeValueFromProduct($product, $attr_name){
         $product = static::getProduct($product);
 
         if ($product === null){
@@ -390,6 +632,8 @@ class Products extends Posts
     }
 
     /*
+        Verificar funcione y documentar
+
         Generalizada del filtro Ajax de tallas para cliente peruano
         con productos variables
     */
@@ -400,97 +644,183 @@ class Products extends Posts
             throw new \InvalidArgumentException("Category can not be avoided");
         }
 
-        if (isset($config['cache_expires_in'])){
-            $cached = get_transient("$attr_name-$catego");
+        // if (isset($config['cache_expires_in'])){
+        //     $cached = get_transient("$attr_name-$catego");
             
-            if ($cached != null){
-                return $cached;
-            }
-        }
+        //     if ($cached != null){
+        //         return $cached;
+        //     }
+        // }
     
-        $valores = [];
+        $arr = [];
     
         // WC_Product_Variable[]
         $products = static::getProductsByCategoryName($catego);
     
         foreach ($products as $p){
             // id, slug, name
-            $p_valores = static::getAttributeValuesByProduct($p, $attr_name);
-            
-            foreach ($p_valores as $pt){
-                $id = $pt['id'];
-    
-                if (!isset($valores[$id])){
-                    $valores[$id] = [
-                        'slug' => $pt['slug'],
-                        'name' => $pt['name']
-                    ];
-                }
+            $attr = static::getAttributeValueFromProduct($p, $attr_name);
+
+            $id = $p['id'];
+
+            if (!isset($arr[$id])){
+                $arr[$id] = [
+                    'slug' => $attr['slug'],
+                    'name' => $attr['name']
+                ];
             }
+            
         }
     
-        if (isset($config['cache_expires_in'])){
-            set_transient("{$attr_name}-$catego", $valores, $config['cache_expires_in']);
-        }        
+        // if (isset($config['cache_expires_in'])){
+        //     set_transient("{$attr_name}-$catego", $arr, $config['cache_expires_in']);
+        // }        
     
-        return $valores;
+        return $arr;
+    }
+
+    /*
+        Devuelve si un termino existe para una determinada taxonomia
+    */
+    static function termExists($term_name, string $taxonomy)
+    {
+        if (!Strings::startsWith('pa_', $taxonomy)) {
+            $taxonomy = 'pa_' . $taxonomy;
+        }
+
+        return (term_exists($term_name, $taxonomy) !== null);
     }
 
 
     /*
-        Get Metadata by Product Id (pid)
+        Size (attribute)
+        small  (term)
+        medium (term)
+        large  (term)
 
-        Ej:
-
-        static::getMetaByPID($pid, static::$cat_metakey)
-
-        Salida:
-
-        array (
-            0 =>
-            (object) array(
-                'term_id' => '20',
-                'name' => 'Medicamentos',
-                'slug' => 'medicamentos',
-                'term_group' => '0',
-                'term_taxonomy_id' => '20',
-                'taxonomy' => static::$cat_metakey,
-                'description' => '',
-                'parent' => '0',
-                'count' => '1389',
-            ),
-            1 =>
-            (object) array(
-                'term_id' => '34',
-                'name' => 'Antialérgicos antihistamínicos',
-                'slug' => 'antialergicos-antihistaminicos',
-                'term_group' => '0',
-                'term_taxonomy_id' => '34',
-                'taxonomy' => static::$cat_metakey,
-                'description' => '',
-                'parent' => '0',
-                'count' => '93',
-            ),
-            // ...
-        )
+        In WooCommerce, they are all prepended with 'pa_'
     */
-    static function getMetaByPID($pid, $taxonomy = null){
-		global $wpdb;
+    static function getTermIdsByTaxonomy(string $taxonomy)
+    {
+        global $wpdb;
 
-		$pid = (int) $pid;
-
-        if ($taxonomy != null){
-            $and_taxonomy = "AND taxonomy = '$taxonomy'";
+        if (!Strings::startsWith('pa_', $taxonomy)) {
+            $taxonomy = 'pa_' . $taxonomy;
         }
 
-		$sql = "SELECT T.*, TT.* FROM {$wpdb->prefix}term_relationships as TR 
-		INNER JOIN `{$wpdb->prefix}term_taxonomy` as TT ON TR.term_taxonomy_id = TT.term_id  
-		INNER JOIN `{$wpdb->prefix}terms` as T ON  TT.term_taxonomy_id = T.term_id
-		WHERE 1=1 $and_taxonomy AND TR.object_id='$pid'";
+        $sql = "SELECT term_id FROM `{$wpdb->prefix}term_taxonomy` WHERE `taxonomy` = '$taxonomy';";
 
-		return $wpdb->get_results($sql);
-	}
+        return $wpdb->get_col($sql);
+    }
+
+    /*
+        Delete Attribute Term by Name
+
+        Borra los terminos agregados con insertAttTerms() de la tabla 'wp_terms' por taxonomia (pa_forma_farmaceutica, etc)
+    */
+    static function deleteTermByName(string $taxonomy, $args = [])
+    {
+        if (!Strings::startsWith('pa_', $taxonomy)) {
+            $taxonomy = 'pa_' . $taxonomy;
+        }
+
+        $term_ids = static::getTermIdsByTaxonomy($taxonomy);
+
+        foreach ($term_ids as $term_id) {
+            wp_delete_term($term_id, $taxonomy, $args);
+        }
+    }
+
+    static function deleteMeta($post_id, $meta_key, bool $prepend = false)
+    {
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
+        }
+
+        delete_post_meta($post_id, $meta_key);
+    }
     
+/*
+        Devolucion de array de metas incluidos atributos de posts
+
+        array (
+            '_sku' =>
+            array (
+                0 => '7800063000770',
+            ),
+            '_regular_price' =>
+            array (
+                0 => '2790',
+            ),
+
+            // ...
+            
+            '_product_attributes' =>
+            array (
+                0 => 'a:0:{}',
+            ),
+            
+            // ...
+
+            '_laboratorio' =>
+            array (
+                0 => 'Mintlab',
+            ),
+            '_enfermedades' =>
+            array (
+                0 => 'Gripe',
+            ),        
+        )
+
+        Si $single es true, en vez de devolver un array, se devuelve un solo valor,
+        lo cual tiene sentido con $key != ''
+    */
+    static function getMeta($pid, $meta_key = '', bool $single = true, bool $prepend = false)
+    {
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
+        }
+
+        return get_post_meta($pid, $meta_key, $single);
+    }
+
+    /*  
+        Get metas "ID" by meta key y value 
+    */
+    static function getMetaIDs($meta_key, $dato, bool $prepend = false)
+    {
+        global $wpdb;
+
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
+        }
+
+        // Preparar la consulta SQL para buscar el ID de la meta
+        $query = $wpdb->prepare(
+            "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = %s AND meta_value = %s",
+            $meta_key,
+            $dato
+        );
+
+        // Ejecutar la consulta
+        $result = $wpdb->get_results($query);
+
+        return $result;
+    }
+
+    static function setMeta($post_id, $meta_key, $dato, bool $sanitize = false, bool $prepend = false)
+    {
+        if ($prepend && !empty($meta_key)) {
+            $meta_key = ltrim($meta_key, '_') . '_' . Strings::slug($meta_key);
+        }
+
+        if ($sanitize) {
+            $dato = sanitize_text_field($dato);
+        }
+
+        update_post_meta($post_id, $meta_key, $dato);
+    }
+
     // gets featured image
     static function getImage($product, $size = 'woocommerce_thumbnail', $attr = [], $placeholder = true){
         $p =  is_object($product) ? $product : static::getProduct($product);
@@ -507,7 +837,15 @@ class Products extends Posts
         return !Strings::endsWith('/placeholder.png', $src);
     }
 
-    static function getTagsByPID($pid){
+    static function deleteImagesByPostID($post_id){
+        $images = get_attached_media( 'image', $post_id );
+
+        foreach ( $images as $image ) {
+            wp_delete_attachment( $image->ID, true );
+        }
+    }
+
+    static function getTagsByPostID($pid){
 		global $wpdb;
 
 		$pid = (int) $pid;
@@ -544,18 +882,18 @@ class Products extends Posts
     /**
      * Method to delete Woo Product
      * 
-     * $force true to permanently delete product, false to move to trash.
+     * $permanently true to permanently delete product, false to move to trash.
      * 
      */
-    static function deleteProduct($id, $force = false)
+    static function deleteProduct($id, $permanently = false)
     {
         $product = wc_get_product($id);
 
-        if(empty($product))
-            return new \WP_Error(999, sprintf(__('No %s is associated with #%d', 'woocommerce'), 'product', $id));
+        if(empty($product)){
+            throw new \Exception(sprintf(__('No %s is associated with #%d', 'woocommerce'), 'product', $id));
+        }            
 
-        // If we're forcing, then delete permanently.
-        if ($force)
+        if ($permanently)
         {
             if ($product->is_type('variable'))
             {
@@ -586,7 +924,7 @@ class Products extends Posts
 
         if (!$result)
         {
-            return new \WP_Error(999, sprintf(__('This %s cannot be deleted', 'woocommerce'), 'product'));
+            throw new \Exception(sprintf(__('This %s cannot be deleted', 'woocommerce'), 'product'));
         }
 
         // Delete parent product transients.
@@ -599,12 +937,12 @@ class Products extends Posts
 
     static function deleteProductBySKU($sku, bool $permanent = false){
         $pid = static::getProductIDBySKU($sku);
-		static::deleteProduct($pid, $permanent);
+		return static::deleteProduct($pid, $permanent);
     }
 
-    static function deleteLastProduct($force = false){
+    static function deleteLastProduct($permanently = false){
         $pid = static::getLastID();
-        static::deleteProduct($pid, $force);
+        static::deleteProduct($pid, $permanently);
     }
 
     static function deleteAllProducts(){
@@ -635,33 +973,6 @@ class Products extends Posts
 
         return ($qty == 1) ? ($res_ids[0] ?? false) : $res_ids;
     }
-
-
-    static function getRandomProductIDs($qty = 1, $type = 'product'){
-        global $wpdb;
-
-        if (empty($qty) || $qty < 0){
-            throw new \InvalidArgumentException("Quantity can not be 0 or null or negative");
-        }
-
-        $sql = "SELECT ID FROM {$wpdb->prefix}posts WHERE post_type IN ('$type') ORDER BY RAND() LIMIT $qty";
-
-        $res = $wpdb->get_results($sql, ARRAY_A);
-        return array_column($res, 'ID');
-    }
-
-    
-    /*
-        Todos los atributos "nativos" parecen comenzar con "_". Ej:
-        
-        para tax_class es _tax_class
-        para thumbnail_id es _thumbnail_id
-        etc
-    */  
-    static function setPostAttribute($pid, $key, $value){
-        update_post_meta($pid, $key, $value);
-    }
-
     
     static function getFeaturedImageID($product){
         if (!is_object($product) && is_numeric($product)){
@@ -695,55 +1006,32 @@ class Products extends Posts
         return wp_get_attachment_image_url( $image_id, $size);
     }
 
-    static function getProductCategoryNames($pid){
-        return wp_get_post_terms( $pid, static::$cat_metakey, array('fields' => 'names') );
-    }
-
-    /*
-        Sobre-escribe cualquier categoria previa
-    */
-    static function setProductCategoryNames($pid, Array $categos){
-        if (count($categos) >0 && is_array($categos[0])){
-            throw new \InvalidArgumentException("Categorias no pueden ser array de array");
-        }
-
-        wp_set_object_terms($pid, $categos, static::$cat_metakey);
-    }
-
-    /*
-        Agrega nuevas categorias
-    */
-    static function addProductCategoryNames($pid, Array $categos){
-        $current_categos = static::getProductCategoryNames($pid);
-
-        if (!empty($categos)){
-            $current_categos = array_diff($current_categos, ['Uncategorized']);
-        }
-
-        $categos = array_merge($current_categos, $categos);
-
-        static::setProductCategoryNames($pid, $categos);
-    }
-    
     static function setProductTagNames($pid, Array $names){
         if (count($names) >0 && is_array($names[0])){
-            //dd($names, 'TAGS');
-            throw new \InvalidArgumentException("Categorias no pueden ser array de array");
+            throw new \InvalidArgumentException("Categories can not be array of arrays");
         }
 
         wp_set_object_terms($pid, $names, 'product_tag');
     }
 
-    static function updatePrice($pid, $price){
+    static function updatePrice($pid, $price, bool $if_not_null = true){
+        if ($if_not_null && $price == 0){
+            return;
+        }
+
         update_post_meta($pid, '_price', $price);
         update_post_meta($pid, '_regular_price', $price );
     }
 
-    static function updateSalePrice($pid, $sale_price){
+    static function updateSalePrice($pid, $sale_price, bool $if_not_null = true){
+        if ($if_not_null && $sale_price == 0){
+            return;
+        }
+
         update_post_meta($pid, '_sale_price', $sale_price );
     }
 
-    static function updateStock($product, $qty){      
+    static function updateStock($product, $qty, bool $save = true){      
         $product = static::getProduct($product);  
 
         if ($product === null){
@@ -759,28 +1047,195 @@ class Products extends Posts
         }
 
         $product->set_stock_status($status);
-        $product->save();
+        
+        if ($save){
+            $product->save();
+        }        
+    }
+
+    /*
+        Images and Gallery
+
+        Ej:
+
+        $images = [
+            "https://d2wuoo4cuot0vy.cloudfront.net/0026-0010/0026-0010_1134924986.jpg",
+            "https://d2wuoo4cuot0vy.cloudfront.net/0026-0010/0026-0010_1434593415.jpg"
+        ];
+
+        $featured = $images[0];
+
+        Products::setImages($pid, $images, $featured);
+    */
+    static function setImages(int $pid, array $images, $featured_img = null){
+        $att_ids = [];
+
+        $featured_img = $featured_img ?? is_array($images) ? ($images[0] ?? null) : $images;
+
+        // dd([
+        //     'pid'      => $pid,
+        //     'images'   => $images,
+        //     'featured' => $featured_img
+        // ], "IM"); 
+
+        if (count($images) > 0){
+            foreach ($images as $img){
+                $img_url = is_array($img) ? $img[0] : $img;
+
+                $att_id = static::uploadImage($img_url);
+
+                if (!empty($att_id)){
+                    $att_ids[] = $att_id;
+                }  
+            }        
+        }     
+
+        // Featured image
+        if ($featured_img != null) {           
+            if (!empty($att_ids) && in_array($featured_img, $images)){
+                $att_id    = $att_ids[0];
+            } else {
+                $att_id    = static::uploadImage($featured_img);
+                $att_ids[] = $att_id;
+            }
+
+            static::setDefaultImage($pid, $att_id);
+        }
+
+        if (count($att_ids) >0){
+            static::setImagesForPost($pid, $att_ids);
+
+            return $att_ids;
+        }
+    }
+
+    /*
+        Obtener la URL de la imagen subida a la Galeria de Medios
+
+        Ej:
+
+            $featured_img = 'https://www.iconsdb.com/icons/preview/red/house-xxl.png';
+        
+            $att_id       = Products::uploadImage($featured_img);
+
+            dd(Products::getImageURL($att_id));
+
+        o ...
+
+        $pid = Products::getIdBySKU('0026-0010');
+
+        $images = [
+            "https://d2wuoo4cuot0vy.cloudfront.net/0026-0010/0026-0010_1134924986.jpg",
+            "https://d2wuoo4cuot0vy.cloudfront.net/0026-0010/0026-0010_1434593415.jpg"
+        ];
+
+        $featured = $images[0];
+
+        $att_ids = Products::setImages($pid, $images, $featured);
+
+        foreach ($att_ids as $att_id){
+            dd(Products::getImageURL($att_id));
+        }
+    */
+    static function getImageURL($att_id)
+    {
+        return wp_get_attachment_url($att_id);
     }
 
 
-    static function updateProductBySKU($args, $update_images_even_it_has_featured_image = true)
+    // Setea categorias por ID a un producto dado su ID
+    static function setProductCategoryById(&$product, array $cat_ids, bool $save = true)
     {
-        if (!isset($args['sku']) || empty($args['sku'])){
-            throw new \InvalidArgumentException("SKU es requerido");
+        $product->set_category_ids( $cat_ids); 
+
+        if ($save){
+            $product->save();
+        }
+    }
+
+
+    // Agrega categorias por ID a un producto dado su ID
+    static function addProductCategoryById(&$product, array $cat_ids, bool $save = true)
+    {
+        // Get product categories (if there is any)
+        $term_ids = (array) $product->get_category_ids();
+
+        foreach($cat_ids as $cat_id){
+            if (!in_array($cat_id, $term_ids)){
+                $term_ids[] = $cat_id;
+            }
         }
 
-        $pid = static::getProductIDBySKU($args['sku']);
+        $product->set_category_ids($term_ids); 
 
-        if (empty($pid)){
-            throw new \InvalidArgumentException("SKU {$args['sku']} no encontrado");
+        if ($save){
+            $product->save();
+        }
+    }
+
+    /*
+        Cross sells
+    */
+
+    static function updateCrossSellsByProductIDs($product_id, array $related_product_ids)
+    {
+        update_post_meta($product_id, '_crosssell_ids', $related_product_ids);
+    }
+
+    static function updateCrossSellsBySKUs($product_id, array $related_skus, bool $fail_if_not_exist = false)
+    {
+        $related_product_ids = [];
+
+        foreach ($related_skus as $sku) {
+            $pid = static::getProductIDBySKU($sku);
+
+            if (empty($pid)) {
+                if ($fail_if_not_exist){
+                    throw new \InvalidArgumentException("Product with SKU=$sku not found");
+                } else {
+                    Logger::logError(__METHOD__ . " > Product with SKU=$sku not found");
+                }
+            } else {
+                $related_product_ids[] = $pid;  
+            }          
         }
 
-        $product = wc_get_product($pid);
+        // dd($related_product_ids, "CROSS SELLS ENCONTRADOS para PID = $product_id |---------------------");
 
-        // Si hay cambio de tipo de producto, lo actualizo
-        if ($product->get_type() != $args['type']){
-            self::updateProductTypeByProductID($pid, $args['type']);
+        update_post_meta($product_id, '_crosssell_ids', $related_product_ids);
+    }
+
+    /*
+        Up sells
+    */
+
+    static function updateUpSellsByProductIDs($product_id, array $related_product_ids)
+    {
+        update_post_meta($product_id, '_upsell_ids', $related_product_ids);
+    }
+
+    static function updateUpSellsBySKUs($product_id, array $related_skus, bool $fail_if_not_exist = false)
+    {
+        $related_product_ids = [];
+        foreach ($related_skus as $sku) {
+            $pid = static::getProductIDBySKU($sku);
+
+            if (empty($pid)) {
+                if ($fail_if_not_exist){
+                    throw new \InvalidArgumentException("Product with SKU=$sku not found");
+                } else {
+                    Logger::logError(__METHOD__ . " > Product with SKU=$sku not found");
+                }
+            } else {
+                $related_product_ids[] = $pid;  
+            }                      
         }
+        
+        update_post_meta($product_id, '_upsell_ids', $related_product_ids);
+    }
+
+    protected static function __updateProduct(&$product, $args, $allow_zero_for_sale_price){
+        $pid = $args['ID'] ?? $product->get_id();
 
         // Product name (Title) and slug
         if (isset($args['name'])){
@@ -809,24 +1264,20 @@ class Products extends Posts
         // Visibility ('hidden', 'visible', 'search' or 'catalog')
         if (isset($args['visibility'])){
             $product->set_catalog_visibility($args['visibility']);
+        }  
+
+        // Sku --nuevo--
+        if (isset($args['sku:new'])){
+            $product->set_sku($args['sku:new']);
         }
 
-        // Virtual (boolean)
-        if (isset($args['virtual'])){
-            $product->set_virtual($args['virtual']);
-        }        
+        if (isset($args['product_url'])){
+            $product->set_product_url($args['product_url']);
+        }
 
         // Prices
 
-        $price = $args['regular_price'] ?? $args['price'] ?? null;
-
-        if ($price != null){
-            $product->set_regular_price($price);
-        }
-
-        if (isset($args['sale_price'])){
-            $product->set_sale_price($args['sale_price']);
-        }
+        static::setPrices($product, $args, $allow_zero_for_sale_price);
         
         if( isset($args['sale_from'])){
             $product->set_date_on_sale_from($args['sale_from']);
@@ -837,11 +1288,22 @@ class Products extends Posts
         }
         
         // Downloadable (boolean)
-        $product->set_downloadable(  isset($args['downloadable']) ? $args['downloadable'] : false );
-        if( isset($args['downloadable']) && $args['downloadable'] ) {
-            $product->set_downloads(  isset($args['downloads']) ? $args['downloads'] : array() );
-            $product->set_download_limit(  isset($args['download_limit']) ? $args['download_limit'] : '-1' );
-            $product->set_download_expiry(  isset($args['download_expiry']) ? $args['download_expiry'] : '-1' );
+        if (isset($args['downloadable'])) {
+            $product->set_downloadable($args['downloadable']);
+
+            if ($args['downloadable']) {
+                if (isset($args['downloads'])) {
+                    $product->set_downloads($args['downloads']);
+                }
+
+                if (isset($args['download_limit'])) {
+                    $product->set_download_limit($args['download_limit']);
+                }
+
+                if (isset($args['download_expiry'])) {
+                    $product->set_download_expiry($args['download_expiry']);
+                }
+            }
         }
 
         // Taxes
@@ -855,30 +1317,50 @@ class Products extends Posts
             }            
         }
 
-        $args['virtual'] = $args['virtual'] ?? false;
-
-        // SKU and Stock (Not a virtual product)
-        if( ! $args['virtual'] ) {
-
-            // SKU
-            if (isset($args['sku'])){
-                $product->set_sku($args['sku']);
-            }        
-
-            $product->set_manage_stock( isset( $args['manage_stock'] ) ? $args['manage_stock'] : false );
-
+        // Virtual
+       
+        if (isset($args['virtual'])){
+            $product->set_virtual($args['virtual']);
+        }  else {
+            $args['virtual'] =  false;
+        }
+   
+        // Stock    
+       
+        if(!$args['virtual']) {
             if (isset($args['stock_status'])){
-                $product->set_stock_status($args['stock_status']);
-            } elseif (isset($args['is_in_stock'])){
-                $product->set_stock_status($args['is_in_stock']);
-            } else {
-                $product->set_stock_status('instock');        
+                if ($args['stock_status'] === true || $args['stock_status'] === 1 || $args['stock_status'] === 'instock'){
+                    $stock_status = true;
+                } else {
+                    $stock_status = false;
+                }
             }
-            
-            if( isset( $args['manage_stock'] ) && $args['manage_stock'] ) {
-                $product->set_stock_quantity( $args['stock_quantity'] );
-                $product->set_backorders( isset( $args['backorders'] ) ? $args['backorders'] : 'no' ); // 'yes', 'no' or 'notify'
+
+            $product->set_stock_status($stock_status ?? 'instock'); 
+
+            // Stock && manage status
+
+            $stock = $args['stock_quantity'] ?? $args['stock'] ?? null;
+
+            if ($stock !== null){
+                $product->set_stock_quantity($stock);
             }
+
+            $manage_stock = ($stock !== null) ? true : ($args['manage_stock'] ?? null);
+
+            if ($manage_stock !== null){
+                $product->set_manage_stock($manage_stock);
+            }
+
+            if (isset($args['backorders'])){
+                if ($args['backorders'] === true){
+                    $args['backorders'] = 'yes';
+                } else if ($args['backorders'] === false){
+                    $args['backorders'] = 'no';
+                }
+
+                $product->set_backorders($args['backorders']); // 'yes', 'no' or 'notify'  
+            } 
         }
 
         // Sold Individually
@@ -887,126 +1369,193 @@ class Products extends Posts
         }
 
         // Weight, dimensions and shipping class
-        if (isset($args['weight'])){
+        if (isset($args['weight'])) {
             $product->set_weight($args['weight']);
         }
         
-        if (isset($args['length'])){
+        if (isset($args['length'])) {
             $product->set_length($args['length']);
         }
         
-        if (isset($args['width'])){
+        if (isset($args['width'])) {
             $product->set_width($args['width']);
         }
         
-        if (isset( $args['height'])){
+        if (isset($args['height'])) {
             $product->set_height($args['height']);
         }        
-
-        /*
-        if( isset( $args['shipping_class_id'] ) ){
+        
+        if (isset($args['shipping_class_id'])){
             $product->set_shipping_class_id( $args['shipping_class_id'] );
-        }
-        */        
+        }   
 
         // Upsell and Cross sell (IDs)
-        //$product->set_upsell_ids( isset( $args['upsells'] ) ? $args['upsells'] : '' );
-        //$product->set_cross_sell_ids( isset( $args['cross_sells'] ) ? $args['upsells'] : '' );
 
+        if (isset($args['upsells'])){
+            $product->set_upsell_ids($args['upsells']);
+        }       
 
-        // Attributes et default attributes
-        
-        if( isset( $args['attributes'] ) ){
-            $attr = static::insertAttTerms($args['attributes'], ($args['type'] == 'variable'));
-            $product->set_attributes($attr);
-        }
-            
-        /*
-            'default_attributes' => [
-                'pa_talla' => 'l',
-            ]
-        */
-        if( isset($args['default_attributes']) && !empty($args['default_attributes'])){   
-            $product->set_default_attributes( $args['default_attributes'] );
+        if (isset($args['cross_sells'])){
+            $product->set_cross_sell_ids($args['cross_sells']);
         }
 
         // Reviews, purchase note and menu order
-        $product->set_reviews_allowed( isset( $args['reviews'] ) ? $args['reviews'] : false );
-        $product->set_purchase_note( isset( $args['note'] ) ? $args['note'] : '' );
-        
-        if( isset( $args['menu_order'] ) )
-            $product->set_menu_order( $args['menu_order'] );
 
+        if (isset($args['reviews'])){
+            $product->set_reviews_allowed($args['reviews']);
+        }        
+
+        if (isset($args['note'])) {
+            $product->set_purchase_note($args['note']);
+        }
+
+        if(isset($args['menu_order'])){
+            $product->set_menu_order($args['menu_order']);
+        }
+
+        /*            
+            Insercion de atributos  
+        */
+        
+        if( isset( $args['attributes'] ) ){
+            static::simplifyAttributes($args['attributes']);
+
+            if ($args['type'] == 'variable'){
+                static::insertVariableAttrs($product, $args['attributes']);                
+            } elseif($args['type'] == 'simple'){
+                static::addAttributesForSimpleProducts($pid, $args['attributes']);
+            }             
+        }
+            
+        if( isset($args['default_attributes']) /* && !empty($args['default_attributes']) */ ){   
+            $product->set_default_attributes( $args['default_attributes'] );
+        }
             
         ## --- SAVE PRODUCT --- ##
         $pid = $product->save();
 
-        if (isset($args['stock_status'])){
-            update_post_meta( $pid, '_stock_status', wc_clean( $args['stock_status'] ) );
-        } 
+        if (isset($args['category'])){
+            $args['categories'] = [ $args['category'] ];
+        }
 
-
-        // Product categories and Tags
         if( isset( $args['categories'] ) ){
-            $names = isset($args['categories'][0]['name']) ? array_column($args['categories'], 'name') : $args['categories'];
-            static::setProductCategoryNames($pid, $names);
-        }        
+            if (is_numeric($args['categories'][0])){
+                static::setProductCategoryById($product, $args['categories']);
+            } else {
+                static::setCategoriesByNames($pid, $args['categories']);
+            }            
+        }            
 
         if( isset( $args['tags'] ) ){
             $names = isset($args['tags'][0]['name']) ? array_column($args['tags'], 'name') : $args['tags'];
             static::setProductTagNames($pid, $names);
         }
             
+        // Images and Gallery    
 
-        // Images and Gallery
-        
-        $current_featured_image = static::getFeaturedImageID($pid);
+        $galery_imgs = $args['gallery_images'] ?? $args['images'] ?? [];
+        $featured    = $args['image'] ?? null;
 
-        if (empty($current_featured_image) || $update_images_even_it_has_featured_image){
-            $images = $args['gallery_images'] ?? $args['images'] ?? [];
-
-            if (count($images) >0){
-                $att_ids = [];
-                foreach ($images as $img){
-                    $img_url = is_array($img) ? $img[0] : $img;
-                    $att_id  = static::uploadImage($img_url);
-
-                    if (!empty($att_id)){
-                        $att_ids[] = $att_id;
-                    }                
-                }
-
-                static::setImagesForPost($pid, $att_ids); 
-                static::setDefaultImage($pid, $att_ids[0]);        
-            } elseif (isset($args['image'])) {
-                $img = is_array($args['image']) ? $args['image'][0] : $args['image'];
-
-                if (!empty($img)){
-                    $att_id = static::uploadImage($img);
-                    if (!empty($att_id)){
-                        static::setImagesForPost($pid, [$att_id]); 
-                        static::setDefaultImage($pid, $att_id);
-                    }     
-                }
-            }
+        if (!empty($galery_imgs)){
+            static::setImages($pid, $galery_imgs, $featured);     
         }
 
-
-        if ($args['type'] == 'variable'){
+        if (isset($args['type']) && $args['type'] == 'variable'){
             $variation_ids = $product->get_children();
             //dd($variation_ids, 'V_IDS');
             
             // elimino variaciones para volver a crearlas
             foreach ($variation_ids as $vid){
-                wp_delete_post($vid, true);
+                static::deleteProduct($vid, true);
             }
 
             if (isset($args['variations'])){
                 foreach ($args['variations'] as $variation){
                     $var_id = static::addVariation($pid, $variation);                    
-                }      
+                }    
+                
+                //@$product->variable_product_sync();
             }  
         }
+    }
+
+    /*  
+        Actualiza precio por ID (product id)
+    */
+    static function updateProduct($args, string $return_type = 'OBJECT', $allow_zero_for_sale_price = false)
+    {
+        $pid = $args['ID'] ?? $args['id'] ?? $args['pid'] ?? null;
+
+        if (empty($pid)){
+            Logger::dd($args, "Product without ID");
+            throw new \InvalidArgumentException("id is required");
+        }
+
+        // Parche para eliminar productos simples que duplican SKU 
+        if (is_array($pid) && count($pid) > 1){
+            $product = wc_get_product($pid[0]);
+            $type    = $product->get_type();
+
+            if ($type == 'simple'){
+                $pid_arr = $pid;
+                $pid     = $pid_arr[0];
+
+                for ($i=1; $i<count($pid_arr); $i++){
+                    // dd("Borrando producto con SKU = {$pid_arr[$i]} [!]");
+                    static::deleteProduct($pid_arr[$i], true);
+                }
+            }
+        }
+
+        if (empty($pid)){
+            throw new \InvalidArgumentException("SKU not found: {$args['sku']}");
+        }
+
+        if (!isset($product)){
+            $product = wc_get_product($pid);
+        }       
+
+        if (!isset($type)){
+            $type = $product->get_type();
+        }
+
+        // Si hay cambio de tipo de producto, lo actualizo
+        if (!empty($args['type']) && $type != $args['type']){
+            self::updateProductTypeByProductID($pid, $args['type']);
+        }
+
+        // delego a metodo-helper
+        static::__updateProduct($product, $args, $allow_zero_for_sale_price);
+
+        if ($return_type == 'INTEGER'){
+            return $pid; //
+        }   
+
+        return $product; //
+    }
+
+    /*
+        Ej:
+
+        $args  =  [
+            'ID'    => 2298,        // campo requerido
+            'type'  => 'simple',    // campo requerido 
+            'price' => 500
+            // podria o no tener mas campos
+        ];
+
+        Products::updateProduct($args, 'ARRAY');
+    */
+    static function updateProductBySKU($args, string $return_type = 'OBJECT', $allow_zero_for_sale_price = false)
+    {
+        if (!isset($args['sku']) || empty($args['sku'])){
+            Logger::dd($args, "Product without SKU");
+            throw new \InvalidArgumentException("SKU is required");
+        }
+
+        $args['ID'] = static::getProductIDBySKU($args['sku']);
+
+        return static::updateProduct($args, $return_type, $allow_zero_for_sale_price);
     }
 
     /*
@@ -1107,7 +1656,11 @@ class Products extends Posts
     */
     static function addAttributesForSimpleProducts($pid, Array $attributes)
     {
-        if (!Arrays::is_assoc($attributes)){
+        if (empty($attributes)){
+            return;
+        }
+
+        if (!Arrays::isAssocc($attributes)){
             throw new \InvalidArgumentException("El Array de atributos debe ser asociativo");
         }
 
@@ -1137,103 +1690,110 @@ class Products extends Posts
         update_post_meta($pid, '_product_attributes', []);
     }
 
-    /*`
-        Inserta terminos en atributos re-utilizables
+    /*
+        $atttributes = [
+            'Size'  => ['S', 'M', 'L'],
+            'Color' => ['Red', 'Yellow'],
+        ]
 
-        Pre-cond: los atributos deben existir.
-
-        Nota: antes se llamaba createProductAttributes()
-
-        https://gist.github.com/alphasider/b9916b51083c48466f330ab0006328e6
-
-        array(
-            // Taxonomy and term name values
-            'pa_color' => array(
-                'term_names' => array('Red', 'Blue'),
-                'is_visible' => true,
-                'for_variation' => false,
-            ),
-            'pa_size' =>  array(
-                'term_names' => array('X Large'),
-                'is_visible' => true,
-                'for_variation' => false,
-            ),
-        )
-
-        It works even for Simple products althought them they can not be used
-
-
-        Los terminos son insertados en la tabla `wp_terms` 
+	    @return void
     */
-    static function insertAttTerms(Array $attributes, bool $for_variation){
+    static function setVariableAttrs(\WC_Product_Variable &$product, Array $attributes, $default_attrs = null){
+        $attribute_ay = [];
 
-        $data = array();
-        $position = 0;
-
-        foreach( $attributes as $_taxonomy => $values ){
-            $taxonomy = str_replace('pa_', '', $_taxonomy);
-            $taxonomy = 'pa_'. $taxonomy;
-
-            if( ! taxonomy_exists( $taxonomy ) )
-                continue;
-
-            // Get an instance of the WC_Product_Attribute Object
-            $attribute = new \WC_Product_Attribute();
-
-            $term_ids = array();
-
-            if (isset($values['is_visible'])){
-                $visibility = $values['is_visible'];
-            }
-
-            if (isset($values['term_names'])){
-                $values = $values['term_names'];
-            }
-
-            // Loop through the term names
-            foreach( $values as $term_name ){
-                if ($term_name == ''){
-                    continue; //*
-                }
-
-                if (is_array($term_name)){
-                    //dd($term_name, '$term_name');
-                    throw new \Exception("\$term_name debe ser un string");
-                }
-
-                if( term_exists( $term_name, $taxonomy ) ){
-                    // Get and set the term ID in the array from the term name
-                    $term_ids[] = get_term_by( 'name', $term_name, $taxonomy )->term_id;
-                }else{
-                    $term_data = wp_insert_term( $term_name, $taxonomy );
-                    $term_ids[]   = $term_data['term_id'];
-                    //continue;
-                }    
-            }
-
-            $taxonomy_id = wc_attribute_taxonomy_id_by_name( $taxonomy ); // Get taxonomy ID
-
-            $attribute->set_id( $taxonomy_id );
-            $attribute->set_name( $taxonomy );
-            $attribute->set_options( $term_ids );
-            $attribute->set_position( $position );
-
-            if (isset($visibility)){
-                $attribute->set_visible( $visibility );
-            }            
+        foreach ($attributes as $name => $options){
+            $attribute  = new \WC_Product_Attribute();
             
-            $attribute->set_variation($for_variation);
+            // 'Color'
+            $attribute->set_name($name);
 
-            $data[$taxonomy] = $attribute; // Set in an array
-
-            $position++; // Increase position
+            // ['Red', 'Blue', 'Black', 'Green', 'Grey']
+            $attribute->set_options($options);
+            
+            $attribute->set_variation(true);
+        
+            // for each
+            $attribute_ay[] = $attribute;
         }
 
-        return $data;
+        $product->set_attributes($attribute_ay);
+
+        if (!empty($default_attrs)){
+            $product->set_default_attributes($default_attrs);
+        }
+
+        $product->save();
     }
 
     /*
-        Para cada atributo no-reusable extrae la diferencia
+        A diferencia de setVariableAttrs() agrega *nuevos* atributos
+
+        $attributes = [
+            'Size'  => ['S', 'M', 'L'],
+            'Color' => ['Red', 'Yellow'],
+        ]
+
+	    @return void
+    */
+    static function insertVariableAttrs(&$product, Array $attributes, $default_attrs = null){
+        $attribute_ay = [];
+        
+        $atts = $product->get_attributes();
+
+        $_options = [];
+        foreach($atts as $ix => $at){
+            if ($at instanceof \WC_Product_Attribute){
+                $array  = $at->get_data();
+                $name   = $at['name'];
+                $values = $at['value'];
+
+                // dd($values, $name);
+
+                $_vals = explode(' | ', $values);
+
+                
+                $_options[$name] = $_vals;
+            }
+        }
+
+        // dd($_options, '$_options all');
+        // exit;
+
+        foreach ($attributes as $name => $options){
+            $attribute  = new \WC_Product_Attribute();
+            
+            // 'Color'
+            $attribute->set_name($name);
+
+            // dd($options, "$name | before");
+            // dd($_options[$name], '$_options');
+
+            if (isset($_options[$name])){
+                $options = array_unique(array_merge($options, $_options[$name]));
+            }
+
+            // dd($options, "$name | after");
+
+            // ['Red', 'Blue', 'Black', 'Green', 'Grey']
+            $attribute->set_options($options);
+            
+            $attribute->set_variation(true);
+        
+            // for each
+            $attribute_ay[] = $attribute;
+        }
+
+        $product->set_attributes($attribute_ay);
+
+        if (!empty($default_attrs)){
+            $product->set_default_attributes($default_attrs);
+        }
+
+        $product->save();
+    }
+
+    /*
+        Para cada atributo extrae la diferencia
 
         Ej: 
 
@@ -1329,9 +1889,18 @@ class Products extends Posts
         return $dif;
     }
 
+    // Obtén el precio formateado según la configuración de WooCommerce
+    static function formatMoney($price){
+        $price = str_replace(',', '.', $price);
+        return wc_format_decimal($price);
+    }
 
-    // Custom function for product creation (For Woocommerce 3+ only)
-    static function createProduct($args, $create_attributes_for_simple_products = false)
+    /*
+        Crea producto
+
+        @param string $return_type puede ser 'OBJECT' o 'INTEGER'
+    */
+    static function createProduct(Array $args, string $return_type = 'OBJECT', $allow_zero_for_sale_price = false)
     {
         if (isset($args['sku']) && !empty($args['sku']) && !empty(static::getProductIDBySKU($args['sku']))){
             throw new \InvalidArgumentException("SKU {$args['sku']} ya está en uso.");
@@ -1342,214 +1911,28 @@ class Products extends Posts
         if( ! $product )
             return false;
 
-        if (isset($args['product_url'])){
-            $product->set_product_url($args['product_url']);
-        }
+        static::__updateProduct($product, $args, $allow_zero_for_sale_price);
 
-        // Product name (Title) and slug
-        $product->set_name( $args['name'] ); // Name (title).
-    
-        // Description and short description:
-        $product->set_description( $args['description'] ?? '' );
-        $product->set_short_description( $args['short_description'] ?? '');
-
-        // Status ('publish', 'pending', 'draft' or 'trash')
-        $product->set_status( isset($args['status']) ? $args['status'] : 'publish' );
-
-        // Featured (boolean)
-        $product->set_featured(  isset($args['featured']) ? $args['featured'] : false );
-
-        // Visibility ('hidden', 'visible', 'search' or 'catalog')
-        $product->set_catalog_visibility( isset($args['visibility']) ? $args['visibility'] : 'visible' );
-
-        // Virtual (boolean)
-        $product->set_virtual( isset($args['virtual']) ? $args['virtual'] : false );
-
-        // Prices
-
-        $price = $args['regular_price'] ?? $args['price'] ?? null;
-
-        if ($price !== null){
-            $product->set_regular_price($price);
-        }
-
-        if (isset($args['sale_price'])){
-            $product->set_sale_price($args['sale_price']);
-        }
-        
-        if( isset($args['sale_from'])){
-            $product->set_date_on_sale_from($args['sale_from']);
-        }
-
-        if( isset($args['sale_to'])){
-            $product->set_date_on_sale_to($args['sale_to']);
-        }
-        
-        // Downloadable (boolean)
-        $product->set_downloadable(  isset($args['downloadable']) ? $args['downloadable'] : false );
-        if( isset($args['downloadable']) && $args['downloadable'] ) {
-            $product->set_downloads(  isset($args['downloads']) ? $args['downloads'] : array() );
-            $product->set_download_limit(  isset($args['download_limit']) ? $args['download_limit'] : '-1' );
-            $product->set_download_expiry(  isset($args['download_expiry']) ? $args['download_expiry'] : '-1' );
-        }
-
-        // Taxes
-        if ( get_option( 'woocommerce_calc_taxes' ) === 'yes' ) {
-            $product->set_tax_status(  isset($args['tax_status']) ? $args['tax_status'] : 'taxable' );
-            $product->set_tax_class(  isset($args['tax_class']) ? $args['tax_class'] : '' );
-        }
-
-        $args['virtual'] = $args['virtual'] ?? false;
-
-        // SKU and Stock (Not a virtual product)
-        if( ! $args['virtual'] ) {
-
-            // SKU
-            if (isset($args['sku'])){
-                $product->set_sku($args['sku']);
-            }        
-
-            $product->set_manage_stock( isset( $args['manage_stock'] ) ? $args['manage_stock'] : false );
-
-            if (isset($args['stock_status'])){
-                $product->set_stock_status($args['stock_status']);
-            } elseif (isset($args['is_in_stock'])){
-                $product->set_stock_status($args['is_in_stock']);
-            } else {
-                $product->set_stock_status('instock');        
-            }
-            
-            if( isset( $args['manage_stock'] ) && $args['manage_stock'] ) {
-                $product->set_stock_quantity( $args['stock_quantity'] );
-                $product->set_backorders( isset( $args['backorders'] ) ? $args['backorders'] : 'no' ); // 'yes', 'no' or 'notify'
-            }
-        }
-
-        // Sold Individually
-        if (isset($args['sold_individually'])){
-            $product->set_sold_individually($args['is_sold_individually'] != 'no');
-        }
-
-        // Weight, dimensions and shipping class
-        $product->set_weight( isset( $args['weight'] ) ? $args['weight'] : '' );
-        $product->set_length( isset( $args['length'] ) ? $args['length'] : '' );
-        $product->set_width( isset(  $args['width'] ) ?  $args['width']  : '' );
-        $product->set_height( isset( $args['height'] ) ? $args['height'] : '' );
-
-        /*
-        if( isset( $args['shipping_class_id'] ) ){
-            $product->set_shipping_class_id( $args['shipping_class_id'] );
-        }
-        */        
-
-        // Upsell and Cross sell (IDs)
-        //$product->set_upsell_ids( isset( $args['upsells'] ) ? $args['upsells'] : '' );
-        //$product->set_cross_sell_ids( isset( $args['cross_sells'] ) ? $args['upsells'] : '' );
-
-
-        /*
-            Attributes et default attributes
-
-            Crear los atributos primero por eficiencia y no para cada producto
-        */
-        if( isset( $args['attributes'] ) ){     
-
-            if ($args['type'] == 'variable'){
-                $attr = static::insertAttTerms($args['attributes'], ($args['type'] == 'variable'));
-                $product->set_attributes($attr);
-            } elseif($args['type'] == 'simple'){
-                if ($create_attributes_for_simple_products){
-                    $attr = static::insertAttTerms($args['attributes'], ($args['type'] == 'variable'));
-                    $product->set_attributes($attr);
-                }
-            } 
-            
-        }
-            
-        if (isset($args['default_attributes'])){
-            $product->set_default_attributes( $args['default_attributes'] ); 
-        }
-
-        // Reviews, purchase note and menu order
-        $product->set_reviews_allowed( isset( $args['reviews'] ) ? $args['reviews'] : false );
-        $product->set_purchase_note( isset( $args['note'] ) ? $args['note'] : '' );
-        if( isset( $args['menu_order'] ) )
-            $product->set_menu_order( $args['menu_order'] );
-
-            
-        ## --- SAVE PRODUCT --- ##
-        $pid = $product->save();
-
-        if (isset($args['stock_status'])){
-            update_post_meta( $pid, '_stock_status', wc_clean( $args['stock_status'] ) );
-        } 
-
-        if (isset($args['category'])){
-            $args['categories'] = [ $args['category'] ];
-        }
-
-        // Product categories and Tags
-        if( isset( $args['categories'] ) ){
-            $names = isset($args['categories'][0]['name']) ? array_column($args['categories'], 'name') : $args['categories'];
-            static::setProductCategoryNames($pid, $names);
-        }        
-
-        if( isset( $args['tags'] ) ){
-            $names = isset($args['tags'][0]['name']) ? array_column($args['tags'], 'name') : $args['tags'];
-            static::setProductTagNames($pid, $names);
-        }
-
-
-        // if( isset( $args['category_slugs'] ) ){
-        //     static::setProductCategorySlugs($pid, $args['category_slugs']);
-        // }        
-
-        // if( isset( $args['tag_slugs'] ) ){
-        //     static::setProductTagSlugs($pid, $names);
-        // }
-            
-
-        // Images and Gallery
-    
-        $att_ids = [];
-    
-        if (isset($args['image'])) {
-            $img = is_array($args['image']) ? $args['image'][0] : $args['image'];
-            $att_id1 = static::uploadImage($img);
-
-            if (!empty($att_id1)){
-                $att_ids[] = $att_id1;
-            }
-        }
-
-        $images = $args['gallery_images'] ?? $args['images'] ?? [];
-    
-        if (count($images) > 0){
-            foreach ($images as $img){
-                $img_url = is_array($img) ? $img[0] : $img;
-
-                $att_id = static::uploadImage($img_url);
-
-                if (!empty($att_id)){
-                    $att_ids[] = $att_id;
-                }  
-            }        
-        } 
-
-        if (count($att_ids) >0){
-            static::setImagesForPost($pid, $att_ids); 
-            static::setDefaultImage($pid, $att_ids[0]);
-        }
-
-        if ($args['type'] == 'variable' && isset($args['variations'])){
-            foreach ($args['variations'] as $variation){
-                static::addVariation($pid, $variation);
-            }     
-            
-            //@$product->variable_product_sync();
-        }
+        if ($return_type == 'INTEGER'){
+            return $product->get_id();
+        }   
 
         return $product; //
+    }
+
+    /*
+        Setea una imagen asociada a un post de tipo "attachment" al post del producto
+    */
+    static function setFeaturedImage(int $pid, int $img_post_id){
+        Products::setDefaultImage($pid, $img_post_id);
+    }
+
+    /*
+        Sube una imagen y asocia el post de tipo "attachment" al post del producto
+    */
+    static function uploadFeaturedImage(int $pid, string $img_url){
+        $att_id = Products::uploadImage($img_url);
+        Products::setDefaultImage($pid, $att_id);
     }
 
     static function dumpProduct($product){
@@ -1564,8 +1947,6 @@ class Products extends Posts
 			$src = $parsed_img['@attributes']['src']; 
 			return $src;
 		};
-
-        $_p = $product;
 
 		// Get Product General Info
 	  
@@ -1623,13 +2004,14 @@ class Products extends Posts
 		
 		// Get Linked Products
 		
-		#$obj['upsell_ids'] = $product->get_upsell_ids();
-		#$obj['cross_sell_id'] = $product->get_cross_sell_ids();
+		$obj['upsell_ids']       = $product->get_upsell_ids();
+		$obj['cross_sell_id']    = $product->get_cross_sell_ids();
+
 		$obj['parent_id']        = $product->get_parent_id();
 		
 		// Get Product Taxonomies
 		
-		$obj['tags']             = static::getTagsByPID($pid); /// deberia ser tag_ids
+		$obj['tags']             = static::getTagsByPostID($pid); /// deberia ser tag_ids
 
 
 		$obj['categories'] = [];
@@ -1655,7 +2037,7 @@ class Products extends Posts
 		// Get Product Images
 		
 		$obj['image_id'] = $product->get_image_id();
-		$obj['image']    =  wp_get_attachment_image_src($product->get_image_id(), 'large');  
+		$obj['image']    = wp_get_attachment_image_src($obj['image_id'], 'large');  
 
 		$obj['gallery_image_ids'] = $product->get_gallery_image_ids();
 			
@@ -1697,6 +2079,139 @@ class Products extends Posts
 
 			foreach ($obj['variations'] as $var_ix => $var)
             {	
+				if ($var['sku'] == $obj['sku']){
+					$obj['variations'][$var_ix]['sku'] = '';
+				}
+			}
+		} else {
+			// Simple product
+
+			$atts = $product->get_attributes();
+
+            foreach($atts as $ix => $at){
+                if ($at instanceof \WC_Product_Attribute){
+                    $at_array  = $at->get_data();
+                    
+                    $at_name   = $at_array['name'];
+                    $at_value  = $at_array['value'];
+
+                    $obj['attributes'][$at_name] = $at_value;
+                }
+            }
+		}		
+	
+		return $obj;		
+	}
+
+    // alias
+    static function dd($product){
+        return static::dumpProduct($product);
+    }
+
+    static function getProductType($product)
+    {
+        if (is_int($product)){
+            $product = static::getProductById($product);
+        }
+
+        return $product->get_type();
+    }
+
+    /*
+        Para el caso de productos variables devuelve algo como:
+
+        Array
+        (
+            [attributes] => Array
+                (
+                    [pa_size] => Array
+                        (
+                            [term_names] => Array
+                                (
+                                    [0] => 42
+                                    [1] => 44
+                                )
+
+                            [is_visible] => 1
+                        )
+
+                )
+
+            [sku] => FS7891ANR6
+            [variations] => Array
+                (
+                    [0] => Array
+                        (
+                            [attributes] => Array
+                                (
+                                    [attribute_pa_size] => 42
+                                )
+
+                            [sku] =>
+                        )
+
+                    [1] => Array
+                        (
+                            [attributes] => Array
+                                (
+                                    [attribute_pa_size] => 44
+                                )
+
+                            [sku] =>
+                        )
+
+                )
+            )
+        )
+    */
+    static function getProductAttributes($pid, bool $include_attr_prefixes = false)
+    {
+        $product = static::getProductById($pid);
+
+        $obj = [];
+
+        if(static::getProductType($product) == 'variable'){
+			$obj['attributes'] = self::getVariationAttributes($product);
+
+            if (!$include_attr_prefixes){
+                foreach ($obj['attributes'] as $name => $val){
+                    if (Strings::startsWith('pa_', $name)){
+                        $key = substr($name, 3);
+
+                        Arrays::renameKey($obj['attributes'], $name, $key);
+                    }
+                }
+            }
+			
+			$_default_atts = $product->get_default_attributes();
+
+            $default_atts  = [];
+            foreach ($_default_atts as $def_at_ix => $def_at_val){
+                $def_at_key = $def_at_ix;
+
+                if ($include_attr_prefixes){
+                    if (!Strings::startsWith('pa_', $def_at_ix)){
+                        $def_at_key = 'pa_' . $def_at_ix;
+                    }
+                } else {
+                    if (Strings::startsWith('pa_', $def_at_ix)){
+                        $def_at_key = substr($def_at_ix, 3);
+                    }
+                }
+
+                $default_atts[$def_at_key] = $def_at_val;
+            }
+
+			if (!empty($default_atts)){
+				$obj['default_attributes'] = $default_atts;
+			}		
+
+            $obj['sku'] = $product->get_sku();
+
+			$variations = $product->get_available_variations();	
+
+			foreach ($variations as $var_ix => $var)
+            {	
                 /*
                     Necesito que cada atributo sea de la forma
 
@@ -1710,14 +2225,14 @@ class Products extends Posts
                     $key = $taxonomy_name;       
             
                     if (Strings::startsWith('attribute_', $key) && !Strings::after($key, 'attribute_pa_')){
-                        $key = 'attribute_pa_' . Strings::after($key, 'attribute_');
+                        $key = ($include_attr_prefixes ? 'attribute_pa_' : '') . Strings::after($key, 'attribute_');
                         $atts[$key] = $at_val;
                     }
                 }
 
                 $obj['variations'][$var_ix]['attributes'] = $atts;
 
-				if ($var['sku'] == $obj['sku']){
+				if (!empty($obj['sku']) && $var['sku'] == $obj['sku']){
 					$obj['variations'][$var_ix]['sku'] = '';
 				}
 			}
@@ -1735,104 +2250,202 @@ class Products extends Posts
                     $obj['attributes'][$at_name] = $at_value;
                 }
             }
-		}		
-	
-		return $obj;		
-	}
+		}	
 
-    // alias
-    static function dd($product){
-        return static::dumpProduct($product);
+        return $obj;
     }
 
-    static function addVariation( $pid, Array $args ){
-        
-        // Get the Variable product object (parent)
-        $product = wc_get_product($pid);
+    /*
+        Conversion de array de atributos de algo como
 
-        $variation_post = array(
-            'post_title'  => $product->get_name(),
-            'post_description' => $args['variation_description'] ?? '',
-            'post_name'   => 'product-'.$pid.'-variation',
-            'post_status' => isset($args['status']) ? $args['status'] : 'publish',
-            'post_parent' => $pid,
-            'post_type'   => 'product_variation',
-            'guid'        => $product->get_permalink()
-        );
+        "pa_size" => [
+            "term_names" => [
+                "40",
+                "42",
+                "44"
+            ],
+            "is_visible" => true
+        ]
 
-        // Creating the product variation
-        $variation_id = wp_insert_post( $variation_post );
+        en algo como
 
-        // Get an instance of the WC_Product_Variation object
-        $variation = new \WC_Product_Variation( $variation_id );
+        [
+            [size] => Array
+            (
+                [0] => 40
+                [1] => 42
+                [2] => 44
+            )
+        ]
+    */
+    static function simplifyAttributes(Array &$attributes)
+    {
+        foreach ($attributes as $name => $val){
+            $name = strtolower($name);
 
-        
-        // Description and short description:
-        $variation->set_description($args['variation_description']);
+            if (Strings::startsWith('pa_', $name)){
+                $key = substr($name, 3);
 
-        if( isset( $args['attributes'] ) ){
-            // Iterating through the variations attributes
-            foreach ($args['attributes'] as $attribute => $term_name )
-            {
-                if ($term_name == ''){
-                    continue; //
+                Arrays::renameKey($attributes, $name, $key);
+
+                if (is_array($val) && isset($val['term_names'])){
+                    $attributes[$key] = $val['term_names'];
                 }
+            }
 
-                $taxonomy = str_replace('attribute_pa_', '', $attribute);
-                $taxonomy = str_replace('pa_', '', $taxonomy);
-                $taxonomy = 'pa_'.$taxonomy; // The attribute taxonomy
+            if (Strings::startsWith('attribute_pa_', $name)){
+                $key = str_replace('attribute_pa_', 'attribute_', $name);
 
-                // If taxonomy doesn't exists we create it (Thanks to Carl F. Corneil)
-                if( ! taxonomy_exists( $taxonomy ) ){
-                    register_taxonomy(
-                        $taxonomy,
-                    'product_variation',
-                        array(
-                            'hierarchical' => false,
-                            'label' => ucfirst( $attribute ),
-                            'query_var' => true,
-                            'rewrite' => array( 'slug' => sanitize_title($attribute) ), // The base slug
-                        ),
-                    );
+                Arrays::renameKey($attributes, $name, $key);
+
+                if (is_array($val) && isset($val['term_names'])){
+                    $attributes[$key] = $val['term_names'];
                 }
-
-                if (is_array($term_name)){
-                    //dd($term_name, '$term_name');
-                    throw new \Exception("\$term_name debe ser un string");
-                }
-
-                // Check if the Term name exist and if not we create it.
-                if( ! term_exists( $term_name, $taxonomy ) )
-                    wp_insert_term( $term_name, $taxonomy ); // Create the term
-
-                $term_slug = get_term_by('name', $term_name, $taxonomy )->slug; // Get the term slug
-
-                // Get the post Terms names from the parent variable product.
-                $post_term_names =  wp_get_post_terms( $pid, $taxonomy, array('fields' => 'names') );
-
-                // Check if the post term exist and if not we set it in the parent variable product.
-                if( ! in_array( $term_name, $post_term_names ) )
-                    wp_set_post_terms( $pid, $term_name, $taxonomy, true );
-
-                // Set/save the attribute data in the product variation
-                update_post_meta( $variation_id, 'attribute_'.$taxonomy, $term_slug );
-
             }
         }
+    }
 
+    /*
+        @param  Array $attrs
+        @param  WC_Product_Variation &$variation
+        @return int
+    */
+    static function setAttributesForVariation(Array $attrs, \WC_Product_Variation &$variation)
+    {
+        
+        /*
+            Cada atributo debe tener como key la forma 'attribute_{name}'
+
+            Ej:
+
+            attribute_size
+        */
+        foreach ($attrs as $name => $value)
+        {
+            if ($value === null){
+                $variation_id = $variation->get_id();
+                Logger::logError("Attribute with name='$name' has NULL value for variation_id=$variation_id");
+            }
+
+            $attrs[$name] = trim($value);
+            $name         = strtolower($name);
+
+            if (!Strings::startsWith('attribute_', $name)){
+                $key = 'attribute_' . $name;
+
+                Arrays::renameKey($attrs, $name, $key);
+            }
+
+            if (Strings::startsWith('attribute_pa_', $name)){
+                $key = str_replace('attribute_pa_', 'attribute_', $name);
+
+                Arrays::renameKey($attrs, $name, $key);
+            }
+        }
+      
+        $variation->set_attributes($attrs);
+        $variation_id = $variation->save();
+
+        if (!isset($variation_id)){
+            $variation_id = $variation->get_id();
+        }
+
+        // Metodo #2 por seguridad (redundancia)
+        foreach ($attrs as $name => $value){
+            update_post_meta($variation_id, $name, $value);
+        }
+
+        return $variation_id;
+    }
+
+    /*
+        @param  int   $parent_id   
+        @param  Array $attrs
+        @return int
+
+        Ej:
+
+        $attrs = [
+            'color' => 'Black',
+            'size'  => 'S'
+        ];
+
+        $args = [
+            'regular_price' => 1002,
+            'attrs' => $attrs,
+            'featured_image' => 
+                'http://woo1.lan/wp-content/uploads/2023/01/190120231674088916.jpeg'
+            
+        ];
+
+        $var_id = Products::addVariation($product_id, $args);
+    */
+    static function addVariation($parent_id, Array $args){
+        return static::createOrUpdateVariation($args, $parent_id);
+    }
+
+    /*
+        @param  int   $variation_id   
+        @param  Array $attrs
+        @return int
+
+        Ej:
+
+        $attrs = [
+            'color' => 'Black',
+            'size'  => 'S'
+        ];
+
+        $args = [
+            'regular_price' => 1002,
+            'attrs' => $attrs,
+            'featured_image' => 
+                'http://woo1.lan/wp-content/uploads/2023/01/190120231674088916.jpeg'
+            
+        ];
+
+        Products::updateVariation($variation_id, $args);
+    */
+    static function updateVariation($variation_id, Array $args){
+        return static::createOrUpdateVariation($args, null, $variation_id);
+    }
+
+    /*
+        @param  int   $parent_id   
+        @param  Array $attrs
+        @param  int   $variation_id  
+        @return int
+    */
+    static function createOrUpdateVariation(Array $args, $parent_id = null, $variation_id = null)
+    {
+        $variation = new \WC_Product_Variation($variation_id);
+
+        if ($parent_id != null /* && $variation_id === null */){
+            $variation->set_parent_id($parent_id);
+
+            // Parent (variable product)
+            $product    = wc_get_product($parent_id);
+            $parent_sku = $product->get_sku();
+        }
+    
+        $attrs = $args['attributes'] ?? $args['attrs'] ?? null;
+    
+        if (empty($attrs)){
+            throw new \Exception("Attributes not found");
+        }
+    
+        $variation_id = static::setAttributesForVariation($attrs, $variation);
+    
         // SKU
-        if (isset($args['sku'])){
+        if (isset($args['sku']) && !empty($args['sku']) && ((isset($parent_sku) && $args['sku'] != $parent_sku) || !isset($parent_sku))){
             $variation->set_sku($args['sku']);
         }
-
+    
+        $variation->set_description($args['description'] ?? null);
+    
         // Prices
-        if (isset($args['display_regular_price'])){
-            $variation->set_regular_price( $args['display_regular_price'] );
-        }
 
-        if (isset($args['display_price'])){
-            $variation->set_sale_price($args['display_price']);
-        }
+        static::setPrices($variation, $args);
         
         if( isset($args['sale_from'])){
             $variation->set_date_on_sale_from($args['sale_from']);
@@ -1841,54 +2454,99 @@ class Products extends Posts
         if( isset($args['sale_to'])){
             $variation->set_date_on_sale_to($args['sale_to']);
         }
-
+    
         // Sold Individually
         if (isset($args['sold_individually'])){
             $variation->set_sold_individually($args['is_sold_individually'] != 'no');
         }
-
+    
         // Weight, dimensions and shipping class
-        $variation->set_weight( isset( $args['weight'] ) ? $args['weight'] : '' );
+        if (isset($args['weight'])) {
+            $variation->set_weight($args['weight']);
+        }
+        
+        if (isset($args['length'])) {
+            $variation->set_length($args['length']);
+        }
+        
+        if (isset($args['width'])) {
+            $variation->set_width($args['width']);
+        }
+        
+        if (isset($args['height'])) {
+            $variation->set_height($args['height']);
+        }        
+        
+        if (isset($args['shipping_class_id'])){
+            $variation->set_shipping_class_id( $args['shipping_class_id'] );
+        }   
 
         // Stock    
-        if (isset($args['stock_status'])){
-            $variation->set_stock_status($args['stock_status']);
-        } elseif (isset($args['is_in_stock'])){
-            $variation->set_stock_status($args['is_in_stock']);
-        } else {
-            $variation->set_stock_status('instock');        
-        }
+        if(isset($args['virtual']) && !$args['virtual']) {    
+            $qty = $args['stock_quantity'] ?? $args['stock'] ?? $args['qty'] ?? null;
 
-        if ($args['max_qty'] != '' && $args['max_qty'] != null){
-            $variation->set_stock_quantity( $args['max_qty'] );
-            $variation->set_manage_stock(true);
-        } else {
-            $variation->set_manage_stock(false);
-        }
-
-
-        // Image por variation if any
-
-        if (isset($args['image'])){
-            $url = $args['image']['full_src'] ?? $args['image']['url'] ?? null;
-            $title = $args['image']['title'] ?? '';
-            $alt = $args['image']['alt'] ?? '';
-            $caption = $args['image']['caption'] ?? '';
-
-            $att_id = static::uploadImage($url, $title, $alt, $caption );
-            
-            if (!empty($att_id)){
-                static::setImagesForPost($variation_id, [$att_id]); 
-                static::setDefaultImage($variation_id, $att_id);  
+            // boolean
+            if (isset($args['is_in_stock'])){
+                $stock_status = $args['is_in_stock'] ? 'instock' : 'outofstock';
+            } else {
+                if (isset($args['stock_status'])){
+                    if ($args['stock_status'] === true || $args['stock_status'] === 1 || $args['stock_status'] === 'instock'){
+                        $stock_status = 'instock';
+                    } else {
+                        if ($args['stock_status'] !== 'onbackorder'){
+                            $stock_status = 'outofstock';
+                        }
+                        
+                    }
+                } else {
+                    if ($qty !== null && $qty > 0){
+                        $stock_status = 'instock';
+                    }
+                }
             }
+
+            
+            if ($qty !== null){
+                update_post_meta($variation_id, '_stock', $qty);
+            }
+            
+            if (isset($args['manage_stock'])){
+                $manage_stock = in_array($args['manage_stock'], [true, 'yes']) ? 'yes' : 'no';
+                update_post_meta($variation_id, '_manage_stock', $manage_stock);
+            }
+
+            update_post_meta($variation_id, '_stock_status', $stock_status);
+
+            $backorders = $args['backorders_allowed'] ?? $args['backorders'] ?? null;
+            if ($backorders !== null){
+                if (is_bool($backorders)){ $backorders = ($backorders ? 'yes' : 'no'); }
+                update_post_meta($variation_id, '_backorders', $backorders);  // 'yes', 'no' or 'notify'
+            }
+
+            if (isset($args['low_stock'])){
+                update_post_meta($variation_id, '_low_stock_amount', $args['low_stock']); 
+            }                
+            
+        }
+     
+        // Featured image
+        $featured_img = $args['featured_image'] ?? $args['image'] ?? null;
+
+        if (is_array($featured_img) && !isset($featured_img['src'])){
+            throw new \InvalidArgumentException("Invalid Array format for featured_image");
         }
 
-        $variation->save();
-        
-        // agrega la variación al producto
-        $product = wc_get_product($pid);
-        $product->save();
+        $img_url      = is_string($featured_img) ? $featured_img : ($featured_img['src'] ?? null);
+        $att_id       = static::uploadImage($img_url);
 
+        if (!empty($att_id)){
+            static::setDefaultImage($variation_id, $att_id);
+        }
+
+        // Completar con demas campos posiblemente presentes en variacions	
+    
+        $variation->save();
+    
         return $variation_id;
     }
 
@@ -1909,6 +2567,47 @@ class Products extends Posts
             return false;
         else
             return $product;
+    }
+
+    /*
+        Devuelve variation o falla sino es variation o no existe
+
+        @param int $pid
+        @param string $return_type que pueede ser 'OBJECT' o 'ARRAY' 
+
+        Ej:
+
+        $data = Products::getVariation($variation_id, 'ARRAY');
+        $attr = $data['attributes'];
+    */
+    static function getVariation($pid, string $return_type = 'OBJECT'){
+        $type = static::getProductType($pid);
+
+        if ($type != 'variation'){
+            throw new \InvalidArgumentException("PID do not correspond to Product variation");
+        } 
+
+        $ret = static::getProductById($pid);
+
+        if ($return_type == 'ARRAY'){
+            $ret = $ret->get_data();
+        }
+
+        return $ret;
+    }
+
+    /*
+        Devuelve variation ids
+    */
+    static function getVariationIds($product)
+    {
+        $product = static::getProduct($product);
+
+        if (static::getProductType($product) != 'variable'){
+            throw new \InvalidArgumentException("Unexpected product type. Expected 'variable'");
+        }
+
+        return $product->get_children();
     }
 
     /*
@@ -2156,8 +2855,6 @@ class Products extends Posts
         return $arr;
     }
 
-
-
     /*
         Devuelve custom attributes de productos simples. NO confundir con metas
 
@@ -2277,7 +2974,7 @@ class Products extends Posts
     /*
         Get attribute(s) from VARIANT or VARIATION
     */
-    static function getAttributesFromVariation($product, $taxonomy = null){
+    static function getAttributesByVariation($product, $taxonomy = null){
         if (!empty($taxonomy)){
             if (substr($taxonomy, 0, 3) != 'pa_'){
                 $taxonomy = 'pa_' .$taxonomy;
@@ -2387,7 +3084,6 @@ class Products extends Posts
         return $status;
     }
 
-
     static function hide($product){
         if (is_object($product)){
             $pid = $product->get_id();
@@ -2442,9 +3138,22 @@ class Products extends Posts
 
         Realmente es el $product_id que es buscado como _sku
     */
-    static function getSKUFromProductID($product_id)
+    static function getSkuByProductId($product_id)
     {
-        return static::getMeta($product_id, '_sku');
+        return static::getMeta($product_id, '_sku', true);
+    }
+
+    // 9-ene 
+    static function getSKUs($post_status = null, $limit = null, $offset = null, $attributes = null, $order_by = null)
+    {
+        $pids = static::getIDs(static::$post_type, $post_status, $limit, $offset, $attributes, $order_by);
+        
+        $skus = [];
+        foreach ($pids as $pid){
+            $skus[$pid] = static::getSkuByProductId($pid);
+        }
+
+        return $skus;
     }
 
     // before load_template_part()
@@ -2463,182 +3172,95 @@ class Products extends Posts
     */
     static function clearCache(&$product)
     {
-        wc_delete_product_transients( $product->get_id() );
+        wc_delete_product_transients($product->get_id());
+
         if ( $product->get_parent_id( 'edit' ) ) {
             wc_delete_product_transients( $product->get_parent_id( 'edit' ) );
             \WC_Cache_Helper::invalidate_cache_group( 'product_' . $product->get_parent_id( 'edit' ) );
         }
+        
         \WC_Cache_Helper::invalidate_attribute_count( array_keys( $product->get_attributes() ) );
         \WC_Cache_Helper::invalidate_cache_group( 'product_' . $product->get_id() );    
     }
 
-
-     /*
-        Crea categoria pero si la categoria existe y tenia padre entonces no la toca para evitar resetear el padre con valor nulo
-        (podria haberse usado en TGSync)
-
-        @return category_id
+    /*
+        Category IDs  <- ProductID
     */
-    static function createOrUpdateCategoButNoOverwriteParentWithNullIfItHas($name, $slug = null, $description = null, $id_parent = null){
-        if (!empty($id_parent)){
-            return static::createOrUpdateCatego($name, $slug, $description,  $id_parent);
-        }
-
-        // objeto de la categoria
-        $_cat   = static::getCategoryByName($name, ARRAY_A);
-
-        // Si existe
-        if (!empty($_cat)){
-            // padre actual
-            $_parent = $_cat['parent'];
-        }
-
-        // Solo si la categoria no exite O ... si existe pero no tiene actualmente padre 
-        if (empty($_cat) || (!empty($_cat) && empty($_parent))){
-            $cid  = static::createOrUpdateCatego($name, $slug, $description,  $id_parent);
-        } else {
-            $cid  = $_cat['term_id'];
-        }
-
-        return $cid;
+    static function getCategoriesByProductID($pid){
+        return static::getCategoriesById($pid);
     }
 
-    // Get Products by Category
+    ///////////////////////
 
     /*
-        OJO: hace un AND entre cada categoria en la query
+        Combina los atributos para producir un array con los atributos de todas las variaciones
+
+        Ej:
+
+        $p = [
+            'attributes' => [
+                'Color' => [
+                    51177678 => 'Blanco',
+                    51177683 => 'Negro',
+                    51177688 => 'Gris',
+                    51177693 => 'Marrón'
+                ],
+                'Talla' => [
+                    0 => 'S',
+                    1 => 'M',
+                    2 => 'L'
+                ]
+            ]
+        ];
+
+        $attr_variations = Products::getAllPosibleVariations($p['attributes']);
+
+        Genera algo como:
+
+        Array
+        (
+            [0] => Array
+                (
+                    [Color] => Blanco
+                    [Talla] => S
+                )
+
+            [1] => Array
+                (
+                    [Color] => Blanco
+                    [Talla] => M
+                )
+
+            [2] => Array
+                (
+                    [Color] => Blanco
+                    [Talla] => L
+                )
+
+            [3] => Array
+                (
+                    [Color] => Negro
+                    [Talla] => S
+                ), 
+        ...
     */
-    static function getProductsByCategory(string $by, Array $cate_ids, $post_status = null)
-    {
-        if (!in_array($by, ['slug', 'id', 'name'])){
-            throw new \InvalidArgumentException("Invalid field '$by' for quering");
-        }
-
-        if ($post_status != null && !in_array($post_status, ['publish', 'draft', 'pending', 'private', 'trash', 'auto-draft'])){
-            throw new \InvalidArgumentException("Invalid post_status '$post_status'");
-        }
-
-        // When you have more term_id's seperate them by comma.
-        $cate_ids_str = implode(',', $cate_ids);
-
-        $args = array(
-            'post_type' => static::$post_type,
-            'numberposts' => -1,
-            'post_status' => $post_status,
-            'fields' => 'ids',
-            'tax_query' => array(
-                array(
-                    'taxonomy' => static::$cat_metakey,
-                    'field' => $by,
-                    'terms' => $cate_ids_str,
-                    'operator' => 'IN',
-                    )
-                 ),
-        );
-
-        return get_posts( $args);
-    }
-
-    static function getProductsByCategoryID(Array $cate_ids, $post_status = null){
-        return static::getProductsByCategory('id', $cate_ids, $post_status);  // no seria "ID" ?
-    }
-
-
-    // Get category
-
-    /*
-        Categories  <- ProductID
+    static function getAllPosibleVariations(array $attributes): array {
+        $result = [[]];
     
-        Retorna algo como:
+        foreach ($attributes as $attributeName => $attributeValues) {
+            $attributeName = strtolower($attributeName);
 
-        [
-            {
-                "id": 193,
-                "name": "Plugins para WordPress",
-                "slug": "plugins-para-wordpress"
-            },
-            {
-                "id": 197,
-                "name": "SEO",
-                "slug": "seo"
+            $newResult = [];
+            foreach ($result as $combination) {
+                foreach ($attributeValues as $value) {
+                    $newCombination = $combination;
+                    $newCombination[$attributeName] = $value;
+                    $newResult[] = $newCombination;
+                }
             }
-        ]
-    */
-    static function getCategoryAttributes($product)
-    {
-        $product = static::getProduct($product);
-
-        $obj = [];
-
-		$category_ids = $product->get_category_ids(); 
-
-		foreach ($category_ids as $cat_id){
-			$terms = get_term_by( 'id', $cat_id, static::$cat_metakey );
-
-			$obj[] = [
-                'id'   => $terms->term_id,
-				'name' => $terms->name,
-				'slug' => $terms->slug
-			];
-		}
-
-        return $obj;
-    }
-
-    /*
-        Category  <----- CategoryName
-    */
-    static function getCategoryByName($name, string $output = OBJECT){
-        $category = get_term_by( 'slug', $name, 'product_cat', $output );
-
-        if ($category === null || $category === false){
-            return null;
+            $result = $newResult;
         }
-
-        return $category;
+    
+        return $result;
     }
-    /*
-        CategoryId  <- CategoryName
-    */
-    static function getCategoryIdByName($name){
-        $category = get_term_by( 'slug', $name, 'product_cat' );
-
-        if ($category === null || $category === false){
-            return null;
-        }
-
-        return $category->term_id;
-    }
-
-    /*
-        CategoryName  <- ProductID
-    */
-    static function getCategoryNameByProductID($cat_id){
-        return parent::getCategoryNameByID($cat_id);
-    }
-
-    // Get categories
-
-    /*
-        Categories  <- ProductID
-    */
-    static function getCategoriesFromProductID($pid){
-        return static::getCategoriesFromID($pid);
-    }
-
-    /*
-        Categories  <- ProductID
-    */    
-    static function getCategoriesFromID($pid){
-        return wc_get_product_term_ids($pid, static::$cat_metakey);
-    }
-
-    /*
-        Categories  <- SKU
-    */
-    static function getCategoriesFromProductSKU($sku){
-        $pid = static::getProductIDBySKU($sku);
-        
-        return static::getCategoriesFromProductID($pid);
-    }  
 }

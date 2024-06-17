@@ -1,9 +1,10 @@
 <?php
-declare(strict_types=1);
 
 namespace boctulus\SW\core\libs;
 
 use boctulus\SW\core\libs\DB;
+use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\libs\Arrays;
 use boctulus\SW\core\libs\Strings;
 
 class Paginator
@@ -27,11 +28,6 @@ class Paginator
         return ($page_size * $current_page) - $page_size;
     }
 
-    /*
-        Ej:
-
-        [ $offset, $limit ] = Paginator::human2SQL($page, $page_size);
-    */
     static function human2SQL(int $page, int $page_size)
     {  
         $offset = static::calcOffset($page, $page_size);
@@ -39,7 +35,6 @@ class Paginator
 
         return [$offset, $limit];
     }
-    
     /*
         Calcula todo lo que debe tener el paginador 
         a excepcion de la proxima url

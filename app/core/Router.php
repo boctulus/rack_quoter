@@ -3,6 +3,7 @@
 namespace boctulus\SW\core;
 
 use boctulus\SW\core\libs\Url;
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Logger;
 use boctulus\SW\core\libs\Request;
 use boctulus\SW\core\libs\Strings;
@@ -20,11 +21,21 @@ class Router
             static::setup();
             static::$instance = new static();
         }
+
         return static::$instance;
 	}
 
 	static protected function setup(){
-		add_action('wp', 'boctulus\SW\core\Router::router');
+		add_action('wp', Config::get('namespace') . '\core\Router::router');
+	}
+
+	static function resolve(){
+		$routes = include Constants::CONFIG_PATH . 'routes.php';
+
+		if (Config::get()['router'] ?? true){ 
+			static::routes($routes);
+			static::getInstance();
+		}
 	}
 
 	// set routes
@@ -52,7 +63,7 @@ class Router
 
 		$req = Request::getInstance();
 	
-		$config = config();
+		$config = Config::get();
 			
 		if (php_sapi_name() != 'cli'){
 			$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -87,52 +98,51 @@ class Router
 			Resolve
 		*/
 	
-		foreach (static::$routes as $route => $fn){
-			$verb  = static::$verbs[$route] ?? 'GET';
+		if (!empty(static::$routes)){
+			foreach (static::$routes as $route => $fn){
+				$verb  = static::$verbs[$route] ?? null;
 
-			$route = ltrim($route, '/');
-			
-			// dd($route, 'PROBANDO ROUTE,...');
-	
-			$route_frag = explode('/', $route);
-	
-			// dd($route_frag, 'Fragments');
-	
-			$match = true;
-			foreach ($route_frag as $ix => $f){			
-				if (isset($_params[$ix]) && $f != $_params[$ix]){
-					$match = false;
-					continue;
-				}
-			}
-	
-			if ($match){
-				$class_name     = Strings::before($fn, '@');
-				$controller_obj = new $class_name();
+				$route = ltrim($route, '/');
 				
-				$method = Strings::after($fn, '@');
-				
-				if (empty($method)){
-					$method = 'index';
+				// dd($route, 'PROBANDO ROUTE,...');
+		
+				$route_frag = explode('/', $route);
+		
+				// dd($route_frag, 'Fragments');
+		
+				$match = true;
+				foreach ($route_frag as $ix => $f){			
+					if (!isset($_params[$ix]) || $f != $_params[$ix]){
+						$match = false;
+						continue;
+					}
 				}
+		
+				if ($match){
+					$class_name     = Strings::before($fn, '@');
+					$controller_obj = new $class_name();
+					
+					$method = Strings::after($fn, '@');
+					
+					if (empty($method)){
+						$method = 'index';
+					}
 
-				if ($verb != null && $verb != $_SERVER['REQUEST_METHOD']){
-					error('Incorrect verb ('.$_SERVER['REQUEST_METHOD'].'), expecting '. $verb,405);
-				}
+					if ($verb != null && $verb != $_SERVER['REQUEST_METHOD']){
+						error('Incorrect verb ('.$_SERVER['REQUEST_METHOD'].'), expecting '. $verb,405);
+					}
 
-				// De momento, nada por aqui
-				$args = [];
-				
-				try {
+					// De momento, nada por aqui
+					$args = [];
+					
 					$data = call_user_func_array([$controller_obj, $method], $args);
 					echo $data; 
-				} catch (\Throwable $e) {
-					Logger::logError($e->getMessage());
-				}
 
-				exit;
-			}
-		}	
+					exit;
+				}
+			}	
+		}
+		
 	} // end method
 
 } // end class

@@ -1,9 +1,10 @@
 <?php
 
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\ApiClient;
 
 function get_api_client(string $url){
-    $config        = config();
+    $config        = Config::get();
     $proxy_url     = $config['proxy_url'] ?? null;
     $proxy_api_key = $config['proxy_api_key'] ?? null;
 

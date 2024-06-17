@@ -2,43 +2,29 @@
 
 use boctulus\SW\core\libs\DB;
 use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\libs\Config;
 
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
 
-    Version: 1.5 (transitional)
+    Version: -- 
 */
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-if (defined('ROOT_PATH')){
-    return;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit; // Exit if accessed directly
 }
 
-require_once __DIR__   . '/app/core/helpers/env.php';
-require_once __DIR__   . '/config/constants.php';
-
-$cfg = require __DIR__ . '/config/config.php';
-
-if ($cfg["use_composer"] ?? true){
-    /*
-        En vez de sleep() deberia usar algun paquete async
-    */
-    
-    if (!file_exists(ROOT_PATH .'composer.json')){
-        throw new \Exception("Falta composer.json");
-    }       
-    
-     if (!file_exists(ROOT_PATH . 'vendor'. DIRECTORY_SEPARATOR .'autoload.php')){
-        chdir(__DIR__);
-        exec("composer install --no-interaction");
-        sleep(10);
-    }
-
-    require_once APP_PATH . 'vendor/autoload.php';
+if ((php_sapi_name() === 'cli') || (isset($_GET['show_errors']) && $_GET['show_errors'] == 1)){
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
 }
+
+require_once __DIR__   . '/app/core/Constants.php';
+require_once __DIR__   . '/app/core/libs/Env.php';
+require_once __DIR__   . '/app/core/helpers/debug.php';
+require_once __DIR__   . '/app/core/helpers/autoloader.php';
+
 
 if ((php_sapi_name() === 'cli')){
     /*
@@ -50,35 +36,34 @@ if ((php_sapi_name() === 'cli')){
     }
 }
 
+
 /* Helpers */
 
-$includes = [
-    __DIR__ . '/app/core/helpers', 
-    __DIR__ . '/app/helpers',
-    __DIR__ . '/boot'
-];
+$autoload  = include __DIR__ . '/config/autoload.php';
 
-$excluded    = [
-    'cli.php'
-];
+$includes  = $autoload['include']; 
+$excluded  = $autoload['exclude'];     
 
-foreach ($includes as $dir){
-    if (!file_exists($dir) || !is_dir($dir)){
-        Files::mkdir($dir);
+foreach ($includes as $file_entry){
+    if (!is_dir($file_entry)){
+        if(pathinfo($file_entry, PATHINFO_EXTENSION) == 'php'){
+            require_once $file_entry;
+            continue;
+        }
     }
 
-    foreach (new \DirectoryIterator($dir) as $fileInfo) {
+    foreach (new \DirectoryIterator($file_entry) as $fileInfo) {
         if($fileInfo->isDot()) continue;
         
         $path     = $fileInfo->getPathName();
         $filename = $fileInfo->getFilename();
 
         // No incluyo archivos que comiencen con "_"
-        if (substr($filename, 0, 1) == '_'){
+        if (substr($filename, 0, 1) == '_'){            
             continue;
         }
 
-        if (in_array($filename, $excluded)){
+        if (in_array($path, $excluded)){
             continue;
         }
 
@@ -89,18 +74,78 @@ foreach ($includes as $dir){
 }
 
 DB::setPrimaryKeyName('ID');
-    
-require_once __DIR__ . '/app/core/scripts/admin.php';
+
+/*
+	Habilitar uploads
+*/
+
+$config = Config::get();
+
+ini_set("memory_limit", $config["memory_limit"] ?? "728M");
+ini_set("max_execution_time", $config["max_execution_time"] ?? 1800);
+ini_set("upload_max_filesize",  $config["upload_max_filesize"] ?? "50M");
+ini_set("post_max_size",  $config["post_max_size"] ?? "50M");
 
 
-if (WP_DEBUG === false){
-    error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-    ini_set('display_errors', 0);
-} else {
-    if (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY){
-        error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+if (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY){
+	error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+}
+
+if (!is_cli()){
+    credits_to_author();
+}
+
+if (!in_array(Config::get('is_enabled'), [true, '1', 'on'])){
+	return;
+}
+
+register_activation_hook(__DIR__ . '/index.php', function(){
+	$log_dir = __DIR__ . '/logs';
+	
+	if (is_dir($log_dir)){
+		Files::globDelete($log_dir);
+	} else {
+		Files::mkdir($log_dir);
+	}
+
+    if (!get_transient(Config::get('namespace') . '__init')){    
+        require __DIR__ . '/scripts/boot/on-ins.php';
+        set_transient(Config::get('namespace') . '__init', 1);
     } else {
-        ini_set('display_errors', 0);
+        require __DIR__ . '/scripts/boot/on-act.php';
+    }    
+});
+
+
+if (!function_exists('db_errors')){
+    function db_errors(bool $status){
+        global $wpdb;
+        $wpdb->show_errors = $status;
     }
 }
 
+db_errors(false);
+
+
+if ((php_sapi_name() === 'cli') || (isset($_GET['show_errors']) && $_GET['show_errors'] == 1)){
+    /*
+        Mostrar errores
+
+        Los valores por default a aplicar podrian depender de definiciones en config.php
+    */
+	ini_set('display_errors', 1);
+	ini_set('display_startup_errors', 1);
+	error_reporting(E_ALL);
+} else {
+	if ($config['debug'] == false){
+		error_reporting(E_ALL & ~E_WARNING);
+		error_reporting(0);
+	}	
+}
+
+if(Config::get('use_composer')){
+    require_once __DIR__  . '/vendor/autoload.php';
+}
+
+
+require_once __DIR__ . '/main.php';

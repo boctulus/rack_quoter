@@ -3,11 +3,17 @@
 namespace boctulus\SW\core\libs;
 
 use boctulus\SW\core\libs\Url;
+use boctulus\SW\core\libs\Config;
 
 class VarDump
 {
 	public static $render       = true;
 	public static $render_trace = false;
+	protected static $log       = false;
+
+	static function log(bool $value = true){
+		static::$log = $value;
+	}
 
 	static function p(){
 		return (php_sapi_name() == 'cli' || Url::isPostmanOrInsomnia()) ? PHP_EOL . PHP_EOL : '<p/>';
@@ -23,7 +29,7 @@ class VarDump
 		echo '</pre>';
 	}
 
-	protected static function export($v = null, $msg = null, bool $additional_carriage_return = false) 
+	protected static function export($v = null, $msg = null, bool $additional_carriage_return = false, bool $msg_at_top = true) 
 	{	
 		$type = gettype($v);
 
@@ -51,6 +57,9 @@ class VarDump
 			};
 
 			switch ($type){
+				case 'NULL':
+					$pp('print_r', 'NULL' . static::br());
+				break;
 				case 'boolean':
 				case 'string':
 				case 'double':
@@ -76,8 +85,8 @@ class VarDump
 			$v = $v ? 'true' : 'false';
 		}	
 
-		if (!empty($msg)){
-			$cfg = config();
+		if ($msg_at_top && !empty($msg)){
+			$cfg = Config::get();
 			$ini = $cfg['var_dump_separators']['start'] ?? '--| ';
 			$end = $cfg['var_dump_separators']['end']   ?? '';
 
@@ -101,6 +110,14 @@ class VarDump
 				$include_break = false;
 		}	
 
+		if (!$msg_at_top && !empty($msg)){
+			$cfg = Config::get();
+			$ini = $cfg['var_dump_separators']['start'] ?? '--| ';
+			$end = $cfg['var_dump_separators']['end']   ?? '';
+
+			echo "{$ini}$msg{$end}". (!$pre ? $br : '');
+		}
+
 		if (!$cli && !$postman && $type != 'array'){
 			echo $br;
 		}
@@ -114,22 +131,26 @@ class VarDump
 		}
 	}	
 
-	static public function dd($val = null, $msg = null, bool $additional_carriage_return = false)
+	static public function dd($val = null, $msg = null, bool $additional_carriage_return = false, bool $msg_at_top = true)
 	{
 		if (!static::$render){
 			return;
 		}
 
-		//var_dump(static::$render_trace);
-
 		if (static::$render_trace){
-			$file = debug_backtrace()[1]['file'];
-			$line = debug_backtrace()[1]['line'];
-		
-			static::export("{$file}:{$line}", "LOCATION", true);
+			$trace = debug_backtrace();
+			
+			$file  = $trace[count($trace)-1]['file'];
+			$line  = $trace[count($trace)-1]['line'];
+
+			static::export("{$file}:{$line}", "LOCATION", true, $msg_at_top);
 		}
 
-		self::export($val, $msg, $additional_carriage_return);
+		if (static::$log){
+			Logger::dd($val, $msg);
+		}		
+
+		self::export($val, $msg, $additional_carriage_return, $msg_at_top);
 	}
 
 	static function hideResponse(){

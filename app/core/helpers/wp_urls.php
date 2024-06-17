@@ -1,6 +1,20 @@
 <?php
 
 use boctulus\SW\core\libs\Strings;
+use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\Constants;
+
+
+/*
+    Convierte ruta relativa al root del plugin en url
+
+    Ej:
+
+    $url = path2url('etc/some-file.csv');
+*/
+function path2url($rel_path){
+    return Files::normalize(plugin_dir_url(Constants::ROOT_PATH . 'index.php') . $rel_path, Files::LINUX_DIR_SLASH);
+}
 
 function plugin_url(){
     return base_url() . '/wp-content/plugins/' . plugin_name();
@@ -27,3 +41,4 @@ function asset_url($file){
 
     return $url;
 }
+

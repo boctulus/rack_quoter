@@ -19,7 +19,7 @@ class Strings
 		'URL'	=> "/\b(?:(?:https?|ftp):\/\/|www\.)[-a-z0-9+&@#\/%?=~_|!:,.;]*[-a-z0-9+&@#\/%=~_|]/i",
 		// ...
 	];
-	
+
 	/*
 		Aplica un filtro de tipo case
 
@@ -27,22 +27,22 @@ class Strings
 	*/
 	static function case($filter, string $str){
 		switch ($filter){
-			case Strings::UPPERCASE_FILTER :
+			case static::UPPERCASE_FILTER :
 				$str = strtoupper($str);
 				break;
-			case Strings::LOWERCASE_FILTER :
+			case static::LOWERCASE_FILTER :
 				$str = strtolower($str);
 				break;
-			case Strings::UCFIRST_FILTER :
+			case static::UCFIRST_FILTER :
 				$str = ucfirst($str);
 				break;
-			case Strings::UCWORDS_FILTER :
+			case static::UCWORDS_FILTER :
 				$str = ucfirst($str);
 				break;
-			case Strings::CAMELCASE_FILTER :
+			case static::CAMELCASE_FILTER :
 				$str = static::snakeToCamel($str);
 				break;
-			case Strings::SNAKECASE_FILTER :
+			case static::SNAKECASE_FILTER :
 				$str = static::toSnakeCase($str);
 				break;
 			default:
@@ -52,41 +52,74 @@ class Strings
 		return $str;
 	}
 
-	/*
-		Util cuando el texto esta en una codifiicacion distinta
-		lo cual puede llevar a que falle la insercion en base de datos
-	*/
-	static function convertEncoding(string $str, $to = 'utf8'){
-		$current_encoding = mb_detect_encoding($str, "UTF-8, ISO-8859-1, ISO-8859-15", true);
+	static function replaceNonAllowedChars($input, $allowedCharsRegex = 'a-z0-9-', $replace = '-', $case_sensitive = false) {
+        // Añade la bandera 'i' para hacer la expresión regular insensible a mayúsculas y minúsculas si $case_sensitive es false
+        $modifiers = $case_sensitive ? '' : 'i';
 
-        return mb_convert_encoding($str, $to, $current_encoding);
+        return preg_replace('/[^'. $allowedCharsRegex . ']/' . $modifiers, $replace, $input);
+    }
+
+	/*
+		Elimina caracteres especiales
+	*/	
+	static function cleanString(string $str) {
+		return static::replaceNonAllowedChars($str, 'a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ-', '');
 	}
 
 	/*
-		Genera un slug compatible con el de WordPress (en teoria)
-		a partir de un string
-
-		Utiliza la funcion de nativa de WP remove_accents()
+		Elimina caracteres duplicados
 	*/
-	static function toSlug(string $str){
-		if (empty($str)){
-			return false;
+	static function replaceDupes($str, $haystack) {
+		 // Reemplaza repetidamente hasta que no haya más repeticiones sucesivas
+		 while (strpos($str, $haystack . $haystack) !== false) {
+			 $str = str_replace($haystack . $haystack, $haystack, $str);
+		 }
+ 
+		 return $str;
+    }
+
+	static function removeMultipleSpaces($str){
+		return static::replaceDupes($str, ' ');
+	}
+
+	/*
+		Ej:
+
+		Strings::parseNumeric('El precio es de 238,003.00 pesos')  # 238,003.00
+		Strings::parseNumeric('El precio es de 238,003.00 pesos para 5 productos')  # 238,003.00
+	*/
+	static function parseNumeric(string $str){
+		$ret = static::matchAll($str, '/([0-9\.,]+)/');
+
+		return $ret[0] ?? null;
+	}
+
+	static function parseNumericOrFail(string $str){
+		$ret = static::parseNumeric($str);
+
+		if ($ret === ''){
+			throw new \Exception("Not numeric value found for '$str'");
 		}
 
-		$fc   = $str[0];
-		$slug = remove_accents($str);
-		$slug = strtolower(str_replace(['_', ' '], '-', $slug));
-		$slug = preg_replace( '/[^A-Za-z0-9-]/', '', $slug );
+		return $ret;
+	}
+	
+	/*
+		Ej:
 
-		/*
-			Si el primer caracter es "_" entonces no es cambiado por "-"
-			para evitar problemas con meta_keys ya que comienzan con "_"
-		*/
-		if ($fc == '_'){
-			$slug[0] = $fc;
-		}
+		Strings::parseNumericAll('El precio es de 238,003.00 pesos para 5 productos');
 
-		return $slug;
+		salida:
+
+		[
+			238,003.00,
+			5
+		]
+	*/
+	static function parseNumericAll(string $str){
+		$ret = static::matchAll($str, '/([0-9\.,]+)/');
+
+		return $ret;
 	}
 
 	/*
@@ -115,9 +148,11 @@ class Strings
 	}
 
 	static function parseFloatOrFail(string $num, $thousand_sep = null, $decimal_sep = null){
-		if (static::parseFloat($num, $thousand_sep, $decimal_sep) === false){
+		if ($ret = static::parseFloat($num, $thousand_sep, $decimal_sep) === false){
 			throw new \Exception("String '$num' is not a Float");
 		}
+
+		return $ret;
 	}
 
 	/*
@@ -130,7 +165,7 @@ class Strings
 			return false;
 		}
 
-		if (!Strings::contains($thousand_sep, $num)){
+		if (!static::contains($thousand_sep, $num)){
 			return (int) $num;
 		}
 
@@ -232,7 +267,7 @@ class Strings
 
 		$num = (string) $num;
 	
-		if ((!is_numeric($num) && !static::match($num, '/([0-9]+)/')) || (Strings::contains('.', $num))){
+		if ((!is_numeric($num) && !static::match($num, '/([0-9]+)/')) || (static::contains('.', $num))){
 			throw new \Exception("Invalid integer for '$num'");
 		}
 
@@ -358,6 +393,29 @@ class Strings
 		return $array[$position];
 	}
 
+	/*
+		Separator es expresion regular
+	*/
+	static function segmentByRegEx(string $string, string $separator, int $position) {
+		$array = preg_split( $separator , $string);
+	
+		if (isset($array[$position])) {
+			return $array[$position];
+		}
+	
+		return false;
+	}
+
+	static function segmentOrFailByRegEx(string $string, string $separator, int $position) {
+		$ret = static::segmentByRegEx($string, $separator, $position);
+
+		if ($ret === false){
+			throw new \Exception("There is no segment in position $position after exploding '$string'");
+		}
+
+		return $ret;
+	}	
+
 	// String antes de la N-ésima ocurrencia del substring
 	static function before(string $string, string $substr, $occurrence = 1){
 		$parts = explode($substr, $string, $occurrence +1);
@@ -481,24 +539,21 @@ class Strings
 	*/
 	static function carriageReturn(string $str){
 		$qty_rn = substr_count($str, "\r\n");
+		$qty_r  = substr_count($str, "\r");
+		$qty_n  = substr_count($str, "\n");
 
-		if ($qty_rn != 0){
+		// Priorizar \r\n sobre \r y \n
+		if ($qty_rn > $qty_r && $qty_rn > $qty_n) {
 			return "\r\n";
 		}
 
-		$qty_r  = substr_count($str, "\r");
-
-		if ($qty_r != 0){
+		// En caso de empate, priorizar \r sobre \n
+		if ($qty_r > $qty_n) {
 			return "\r";
 		}
 
-		$qty_n  = substr_count($str, "\n");
-		
-		if ($qty_n != 0){
-			return "\n";
-		}
-
-		return null;
+		// Si no hay \r ni \r\n, devolver \n
+		return "\n";
 	}
 
 	// alias
@@ -514,31 +569,32 @@ class Strings
 		@param bool $trim
 		@param bool $empty_lines
 	*/
-	static function lines(?string $str, bool $trim = false, bool $empty_lines = true){
+	static function lines(string $str, bool $trim = false, bool $empty_lines = true, $carry_ret = null){
 		if (empty($str)){
 			return [];
 		}
 
-		$cr = static::carriageReturn($str);
-		
+		$cr = $carry_ret ?? static::carriageReturn($str);
+
 		if (empty($cr)){
 			return [ $str ];
 		}
 
 		$lines = explode($cr, $str);
 
-		if (!$empty_lines){
-			foreach ($lines as $ix => $line){
-				$trimmed = trim($line);
+		if ($empty_lines) {
+			// Mantener solo líneas no vacías
+			$lines = array_filter($lines, function($line) {
+				return trim($line) !== '';
+			});
+		} else {
+			// Eliminar líneas vacías
+			$lines = array_filter($lines, 'strlen');
+		}
 
-				if (empty($trimmed)){
-					unset($lines[$ix]);
-				} else {
-					if ($trim){
-						$lines[$ix] = $trimmed;
-					}
-				}
-			}
+		if ($trim) {
+			// Aplicar trim a todas las líneas si es necesario
+			$lines = array_map('trim', $lines);
 		}
 
 		return $lines;
@@ -717,7 +773,7 @@ class Strings
 	/*
 		Apply tabs to some string
 
-		En vez de PHP_EOL, deberias usar Strings::carriageReturn($str)
+		En vez de PHP_EOL, deberias usar static::carriageReturn($str)
 	*/
 	static function tabulate(string $str, int $tabs, ?int $first = null, ?int $last = null){
 		$lines = explode(PHP_EOL, $str);
@@ -815,8 +871,8 @@ class Strings
 
 		Ej:
 
-		$namespace = Strings::match($file_str, '/namespace[ ]{1,}([^;]+)/');
-		$table     = Strings::match($raw_sql, '/insert[ ]+(ignore[ ]+)?into[ ]+[`]?([a-z_]+[a-z0-9]?)[`]? /i', 2);
+		$namespace = static::match($file_str, '/namespace[ ]{1,}([^;]+)/');
+		$table     = static::match($raw_sql, '/insert[ ]+(ignore[ ]+)?into[ ]+[`]?([a-z_]+[a-z0-9]?)[`]? /i', 2);
 
 		Si $pattern es un array, busca coindicencias con cada patron 
 
@@ -885,14 +941,16 @@ class Strings
 	/*
 		Ej:
 
-		Strings::matchAll($str, Strings::$regex['URL']);
+		static::matchAll($str, static::$regex['URL']);
+
+		Antes si fallaba devolvia false, ahora []
 	*/
 	static function matchAll(string $str, string $pattern, $flags = 0, $offset = 0) { 
 		if (preg_match_all($pattern, $str, $matches, $flags, $offset)){			
-			return $matches;
+			return $matches[1];
 		}
 
-		return false;
+		return [];
 	}
 
 	static function ifMatch(string $str, $pattern, callable $fn_success, callable $fn_fail = NULL){
@@ -960,13 +1018,13 @@ class Strings
 		if (is_array($param_name)){
 			$patt = [];
 			foreach ($param_name as $p){
-				$patt[] = Strings::getParamRegex($p, $arg_expr);
+				$patt[] = static::getParamRegex($p, $arg_expr);
 			}	
 		} else {
-			$patt =	Strings::getParamRegex($param_name, $arg_expr);
+			$patt =	static::getParamRegex($param_name, $arg_expr);
 		}
 
-		$res = Strings::match($str, $patt, 1);
+		$res = static::match($str, $patt, 1);
 
 		if ($arg_expr === null){
 			return ($res !== false); 
@@ -1076,7 +1134,7 @@ class Strings
     static function endsWith(string $substr, string $text, bool $case_sensitive = true)
 	{
 		if (!$case_sensitive){
-			$text = strtolower($text);
+			$text   = strtolower($text);
 			$substr = strtolower($substr);
 		}
 
@@ -1325,10 +1383,47 @@ class Strings
 		return preg_replace("/^((?:(?:.*?$search){".--$occurrence."}.*?))$search/", "$1$replace", $subject);
 	}
    
-	static function removeMultipleSpaces($str){
-		return preg_replace('!\s+!', ' ', $str);
-	}
+	/*
+		Recibe un string y un substring a buscar y un arrray de reemplazos alternativos 
+		y devuelve al azar el string con uno de los reemplazos
 
+		Ej:
+
+		$originalString     = "I just bought a pair of shoes from this website and I'm really satisfied!";
+        $substringToReplace = "shoes";
+        $replacementArray   = ["sneakers", "boots", "sandals", "slippers"];
+
+        $modifiedString = static::replaceSubstringRandomly($originalString, $substringToReplace, $replacementArray);
+
+        dd("Original String: $originalString");
+        dd("Modified String: $modifiedString");
+	*/
+	static function replaceSubstringRandomly($originalString, $substringToReplace, $replacementArray) {
+		// Buscar todas las ocurrencias del substring en el string original
+		$positions = [];
+		$startPos = 0;
+	
+		while (($pos = strpos($originalString, $substringToReplace, $startPos)) !== false) {
+			$positions[] = $pos;
+			$startPos = $pos + 1;
+		}
+	
+		// Si no hay ocurrencias, devolver el string original sin cambios
+		if (empty($positions)) {
+			return $originalString;
+		}
+	
+		// Elegir al azar una posición para reemplazar
+		$randomPosition = $positions[array_rand($positions)];
+	
+		// Elegir al azar un reemplazo del array de reemplazos
+		$randomReplacement = $replacementArray[array_rand($replacementArray)];
+	
+		// Realizar el reemplazo
+		$modifiedString = substr_replace($originalString, $randomReplacement, $randomPosition, strlen($substringToReplace));
+	
+		return $modifiedString;
+	}
 
 	/*
 		Atomiza string (divivirlo en caracteres constituyentes)
@@ -1337,7 +1432,6 @@ class Strings
 	static function stringTochars($s){
 		return	preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);
 	}	
-		
 	
 	/*
 		str_replace() de solo la primera ocurrencia
@@ -1411,34 +1505,6 @@ class Strings
 	// alias for exceptLastChar
 	static function untilLastChar(string $str) : string {
 		return substr($str, 0, -1);
-	}
-
-	/*
-		Parse php class from file
-	*/
-	static function getClassName(string $file_str, bool $fully_qualified = true){
-		$pre_append = '';
-			
-		if ($fully_qualified){
-			$namespace = Strings::match($file_str, '/namespace[ ]{1,}([^;]+)/');
-			$namespace = !empty($namespace) ? trim($namespace) : '';
-
-			if (!empty($namespace)){
-				$pre_append = "$namespace\\";
-			}
-		}	
-		
-		$class_name = $pre_append . Strings::matchOrFail($file_str, '/class ([a-z][a-z0-9_]+)/i');
-
-		return $class_name;
-	}
-
-	/*
-		Parse php class given the filename
-	*/
-	static function getClassNameByFileName(string $filename, bool $fully_qualified = true){
-		$file = file_get_contents($filename);
-		return self::getClassName($file, $fully_qualified);
 	}
 
 	/*
@@ -1571,42 +1637,42 @@ class Strings
 								}
 								break;	
 							case 'contains':
-								if (Strings::contains($val, $reg[$field])){                           
+								if (static::contains($val, $reg[$field])){                           
 									continue 2;
 								}
 								break;    
 							case 'notContains':
-								if (!Strings::contains($val, $reg[$field])){                  ;
+								if (!static::contains($val, $reg[$field])){                  ;
 									continue 2;
 								}
 								break; 
 							case 'startsWith':
-								if (Strings::startsWith($val, $reg[$field])){                           
+								if (static::startsWith($val, $reg[$field])){                           
 									continue 2;
 								}
 								break; 
 							case 'notStartsWith':
-								if (!Strings::startsWith($val, $reg[$field])){               
+								if (!static::startsWith($val, $reg[$field])){               
 									continue 2;
 								}
 								break; 
 							case 'endsWith':             
-								if (Strings::endsWith($val, $reg[$field])){                 
+								if (static::endsWith($val, $reg[$field])){                 
 									continue 2;
 								}
 								break;      
 							case 'notEndsWith':
-								if (!Strings::endsWith($val, $reg[$field])){                           
+								if (!static::endsWith($val, $reg[$field])){                           
 									continue 2;
 								}
 								break;  
 							case 'containsWord':
-								if (Strings::containsWord($val, $reg[$field])){                           
+								if (static::containsWord($val, $reg[$field])){                           
 									continue 2;
 								}
 								break;   
 							case 'notContainsWord':
-								if (!Strings::containsWord($val, $reg[$field])){                           
+								if (!static::containsWord($val, $reg[$field])){                           
 									continue 2;
 								}
 								break;  
@@ -1650,22 +1716,22 @@ class Strings
 								}
 								break; 
 							case 'contains':
-								if (Strings::containsAny($vals, $reg[$field])){                           
+								if (static::containsAny($vals, $reg[$field])){                           
 									continue 2;
 								}
 								break;   
 							case 'notContains':
-								if (!Strings::containsAny($vals, $reg[$field])){                           
+								if (!static::containsAny($vals, $reg[$field])){                           
 									continue 2;
 								}
 								break;        
 							case 'containsWord':
-								if (Strings::containsAnyWord($vals, $reg[$field])){                           
+								if (static::containsAnyWord($vals, $reg[$field])){                           
 									continue 2;
 								}
 								break;   
 							case 'notContainsWord':
-								if (!Strings::containsAnyWord($vals, $reg[$field])){                           
+								if (!static::containsAnyWord($vals, $reg[$field])){                           
 									continue 2;
 								}
 								break;     
@@ -1702,6 +1768,20 @@ class Strings
 		return $_path === false ? $path : $_path;
 	}
 
+	/*
+		Asumiendo que hay un solo tipo de slash como sucede en un path,
+		devuelve si es '/' o '\\'
+	*/
+	static function getSlash(string $str) {
+		if (strpos($str, '/') !== false) {
+			return '/';
+		} elseif (strpos($str, '\\') !== false) {
+			return '\\';
+		} else {
+			return null; // No se encontró ningún tipo de slash en la cadena
+		}
+	}
+
 	static function replaceSlashes(string $path) : string {
 		return str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, $path);
 	}
@@ -1720,7 +1800,7 @@ class Strings
 
 		$path = static::realPathNoCoercive($path);
 
-		if (Strings::endsWith('\\', $path) || Strings::endsWith('/', $path)){
+		if (static::endsWith('\\', $path) || static::endsWith('/', $path)){
 			return substr($path, 0, strlen($path)-1);
 		}
 
@@ -1737,11 +1817,11 @@ class Strings
 			return $path;
 		}
 
-		if (Strings::startsWith('\\', $path)){
+		if (static::startsWith('\\', $path)){
 			return substr($path, 1);
 		}
 
-		if (Strings::startsWith('/', $path)){
+		if (static::startsWith('/', $path)){
 			return substr($path, 1);
 		}
 
@@ -1756,7 +1836,7 @@ class Strings
 	static function addTrailingSlash(string $path) : string{
 		$path = static::realPathNoCoercive($path);
 
-		if (!Strings::endsWith('\\', $path) && !Strings::endsWith('/', $path)){
+		if (!static::endsWith('\\', $path) && !static::endsWith('/', $path)){
 			return $path . '/';
 		}
 
@@ -1971,87 +2051,117 @@ class Strings
 		return ((string) round(strlen($str) / (1024))) . ($include_subfix ? ' KB' : '') ;
 	}
 
-	/*
-		0 < $level < 8
-	*/
-	static function minimifyHTML($html, int $level = 5) : string {
-		if ($level >= 7){
-			$html = XML::stripTag($html, 'nav');
-            $html = XML::stripTag($html, 'img');
-			$html = XML::stripTag($html, 'footer');
-			$html = XML::HTML2Text($html);
-
-			// Replace multiple (one ore more) line breaks with a single one.
-			$html = preg_replace("/[\r\n]+/", "\n", $html);
-									
-			return $html;
-		}
-
-		$html = Strings::removeHTMLentities($html);
-		$html = XML::stripTag($html, 'head');
-		$html = XML::stripTag($html, 'footer');
-		$html = XML::stripTag($html, 'script');
-		$html = XML::stripTag($html, 'style');
-		$html = XML::stripTag($html, 'iframe');
-		$html = XML::stripTag($html, 'svg');		
-		$html = XML::removeHTMLAttributes($html, [
-			'onclick',
-			'ondblclick',
-			'onmousedown',
-			'onmouseup',
-			'onmousemove',
-			'onmouseover',
-			'onmouseout',
-			'onkeydown',
-			'onkeyup',
-			'onkeypress',
-			'onfocus',
-			'onblur',
-			'onchange',
-			'onsubmit',
-			'onreset',
-			'onselect',
-			'oninput',
-			'onload',
-			'onunload',
-			'onerror',
-			'onresize',
-			'onscroll'
-		]);
-
-		$html = XML::removeHTMLAttributes($html, ['style', 'class', 'rel', 'target', 'type']);
-		$html = Strings::removeMultiLineComments($html);
-		$html = XML::removeCSS($html);
-
-		if ($level >=2){
-			$html = XML::removeComments($html);
-		}
-
-		if ($level >=3){
-			$html = Strings::removeHTMLTextModifiers($html);
-		}
-
-		if ($level >= 4){
-			$html = XML::removeCSSClasses($html);			
-		}
-
-		if ($level >= 5){
-			$html = Strings::removeDataAttr($html); // bye data-*
-		}
-
-		$html = Strings::removeSpaceBetweenTags($html);
-		$html = Strings::removeMultipleSpacesInLines($html);
-		$html = Strings::wipeEmptyTags($html);		
-
-		
-		$html = static::afterIfContains($html, '<body>');
-
-		if (Strings::contains('</body>', $html)){
-			$html = static::beforeLast($html, '</body>');
-		}	
-
-		return $html;		
+	static function isSerialized($str){
+		return (unserialize($str) !== false);
 	}
+
+	static function enumerateWithLetters(int $value, bool $starting_by_zero = true){
+		return chr($value + 97 + ($starting_by_zero == false ? -1 : 0));
+	}
+
+	/**
+	 * Converts accentuated characters (àéïöû etc.) 
+	 * to their ASCII equivalent (aeiou etc.)
+	 *
+	 * @param  string $str
+	 * @param  string $charset
+	 * @return string
+	 * 
+	 * https://dev.to/bdelespierre/convert-accentuated-character-to-their-ascii-equivalent-in-php-3kf1
+	 */
+	static function accents2Ascii(string $str, string $charset = 'utf-8'): string
+	{
+		$str = htmlentities($str, ENT_NOQUOTES, $charset);
+
+		$str = preg_replace('#&([A-za-z])(?:acute|cedil|caron|circ|grave|orn|ring|slash|th|tilde|uml);#', '\1', $str);
+		$str = preg_replace('#&([A-za-z]{2})(?:lig);#', '\1', $str); // pour les ligatures e.g. '&oelig;'
+		$str = preg_replace('#&[^;]+;#', '', $str); // supprime les autres caractères
+
+		return $str;
+	}
+
+	static function convertAccents($input, $encoding = 'UTF-8') {
+		return mb_convert_encoding($input, 'ASCII', $encoding);
+	}
+
+	static function convertSlashesToHTML($str)
+	{
+        $str = str_replace("\r\n", '<br>', $str);
+        $str = str_replace("\n", '<br>', $str);
+        $str = str_replace("\r", '<br>', $str);
+
+        return $str;
+	}
+
+	static function fixBOM($input) {
+		return preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $input);;
+	}	
+
+	// Caso de uso: campos de un CSV
+	static function sanitize($str, bool $replace_accents = true, bool $trim = false, $allowed = 'a-z0-9- ') 
+	{
+		// Si hay caracteres BOM entonces deben primero convertirse los acentos y recien entonces remover los BOM
+		if ($replace_accents){
+			$str = static::accents2Ascii($str);
+			$str = static::fixBOM($str);
+		}
+
+		$str = str_replace('_', '-', $str);
+		
+		if (!empty($allowed)){
+			$str = static::replaceNonAllowedChars($str, $allowed, '');
+		}
+
+		if ($trim){
+			$str = static::trim($str);
+		}
+		
+		return $str;
+	}
+
+	/*
+		Genera un slug a partir de un string (compatible con WP)
+
+		Ej:
+
+		dd(Strings::slug('lo que EL viento se llevó de España 2022')); 
+	*/
+	static function slug(string $str)
+	{
+		$str = str_replace('/', '', $str);
+		$str = static::sanitize($str, true, true);
+		$str = mb_strtolower($str);
+		$str = str_replace(' ', '-', $str);
+		$str = str_replace('.', '', $str); //
+		$str = static::replaceDupes($str, '-');
+		
+		return trim($str, '-');
+	}
+
+	static function firstNotEmpty($default_value = null, ...$args){
+        foreach ($args as $val){
+            if ($val !== null && $val !== ''){
+                return $val;
+            }
+        }
+
+        return $default_value;
+    }
+
+	/*
+		Extrae emails de un string
+
+		@param string $str
+		@return array
+
+		No los valida, es una funcion sencilla
+	*/
+	static function getEmails($str){
+        return Strings::matchAll($str, '/([a-z0-9_\.]+@[a-z0-9_\.]+)/i');
+    }
+
+
 }
+
 
 

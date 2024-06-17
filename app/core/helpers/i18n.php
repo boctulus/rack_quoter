@@ -1,5 +1,6 @@
 <?php
 
+use boctulus\SW\core\Constants;
 use boctulus\SW\core\libs\Logger;
 use boctulus\SW\core\libs\Plugins;
 use boctulus\SW\core\libs\Strings;
@@ -16,7 +17,7 @@ function get_trans_languages(bool $include_country = true){
     }
 
     // Asumiendo las traducciones las coloco dentro del plugin   
-    $mos   = glob(ROOT_PATH . 'languages' . DIRECTORY_SEPARATOR  . '*.mo');
+    $mos   = glob(Constants::ROOT_PATH . 'languages' . DIRECTORY_SEPARATOR  . '*.mo');
 
     $langs = [];
     foreach ($mos as $mo){
@@ -95,7 +96,7 @@ function set_lang(string $lang)
     $throw  = false;
 
     /*
-        Aca se busca en archivos en /languages con nombres como "mutawp-es_AR.mo"
+        Aca se busca en archivos en /languages con nombres como "mystore-es_AR.mo"
 
         La busqueda NO es por carpetas (como en SimpleRest)
     */
@@ -175,7 +176,7 @@ function make_trans_av()
     // dd($trans_langs_co);
     // dd($trans_langs);
 
-    $path = ROOT_PATH . 'languages' . DIRECTORY_SEPARATOR;
+    $path = Constants::ROOT_PATH . 'languages' . DIRECTORY_SEPARATOR;
 
     // it_IT
     $current_lan = get_lang('wp2');

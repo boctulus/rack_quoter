@@ -41,9 +41,13 @@ class Schema
 	protected $query;
 	protected $exec = true;
 
-	function __construct(string $tb_name){
-		$this->tables = self::getTables();
+	function __construct(string $tb_name)
+	{		
+		$tb_name = Model::addPrefix($tb_name);
+
+		$this->tables  = self::getTables();
 		$this->tb_name = $tb_name;
+
 		$this->fromDB();
 	}
 
@@ -98,7 +102,22 @@ class Schema
 		return $row[0]['Field'];
 	}
 
-	// Válido para MySQL, en un solo sentido: presentes en / hacia la tabla
+	 /**
+     * Obtiene las columnas que representan claves foráneas en una tabla específica o en toda la base de datos.
+	 * 
+	 * Válido para MySQL, en un solo sentido: presentes en / hacia la tabla
+     *
+     * @param string|null $table      El nombre de la tabla para la cual se desean obtener las columnas que representan claves foráneas.
+     *                                Si no se especifica, se obtendrán las columnas de todas las tablas en la base de datos.
+	 * 
+     * @param bool        $not_table  Indica si se desean obtener las columnas que NO representan claves foráneas en lugar de las que sí lo hacen.
+     *                                El valor predeterminado es false, lo que significa que se obtendrán las columnas que representan claves foráneas.
+	 * 
+     * @param string|null $db         El nombre de la base de datos en la que se encuentran las tablas.
+     *                                Si no se especifica, se utilizará la base de datos actual.
+     *
+     * @return array  Un arreglo que contiene los nombres de las columnas que representan claves foráneas.
+     */
 	static function getFKs(string $table = null, bool $not_table = false, ?string $db = null)
 	{
 		DB::getConnection();
@@ -126,8 +145,9 @@ class Schema
 	// Válido para MySQL, en un solo sentido
 	static function getRelations(string $table = null, bool $not_table = false, string $db = null)
 	{
-		if ($db == null){
-			DB::getConnection();
+		DB::getConnection();
+
+		if ($db == null){			
         	$db  = DB::database();
 		}		
 		
@@ -141,7 +161,7 @@ class Schema
 
 		$sql .= "ORDER BY `REFERENCED_COLUMN_NAME`;";
 
-        $rels = Model::query($sql);
+        $rels = DB::select($sql);
         
         $relationships = [];
         foreach($rels as $rel){
@@ -357,7 +377,7 @@ class Schema
 	}
 
 	static function getTables(string $conn_id = null) {	
-		$config = config();
+		$config = Config::get();
 		
 		if ($conn_id != null){
 			if (!isset($config['db_connections'][$conn_id])){
@@ -378,7 +398,7 @@ class Schema
 		https://arjunphp.com/how-to-get-mysql-table-comments/
 	*/
 	static function getTableComment( string $table, string $conn_id = null) {	
-		$config = config();
+		$config = Config::get();
 		
 		if ($conn_id != null){
 			if (!isset($config['db_connections'][$conn_id])){
@@ -398,7 +418,7 @@ class Schema
 
 	// -- ok
 	static function getColumnComment(string $table, string $field, string $conn_id = null) {	
-		$config = config();
+		$config = Config::get();
 		
 		if ($conn_id != null){
 			if (!isset($config['db_connections'][$conn_id])){
@@ -443,9 +463,13 @@ class Schema
 
 	static function hasTable(string $tb_name, string $db_name = null)
 	{	
+		$tb_name = tb_prefix() . $tb_name;
+
+		DB::getConnection();
+
 		switch (DB::driver()){
 			case 'sqlite':
-				$res = Model::query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='$tb_name';");	
+				$res = DB::select("SELECT 1 FROM sqlite_master WHERE type='table' AND name='$tb_name';");	
 				return (!empty($res));
 
 			case 'mysql':
@@ -473,6 +497,9 @@ class Schema
 	static function renameTable(string $ori, string $final){
 		$conn = DB::getConnection();   
 
+		$ori   = tb_prefix() . $ori;
+		$final = tb_prefix() . $final;
+
 		$st = $conn->prepare("RENAME TABLE `$ori` TO `$final`;");
 		return $st->execute();
 	}	
@@ -485,9 +512,11 @@ class Schema
 	}
 
 	static function dropIfExists(string $table){
-		$conn = DB::getConnection();   
+		$table = tb_prefix() . $table;
 
-		$st = $conn->prepare("DROP TABLE IF EXISTS `{$table}`;");
+		$conn  = DB::getConnection();   
+
+		$st    = $conn->prepare("DROP TABLE IF EXISTS `{$table}`;");
 		return $st->execute();
 	}
 
@@ -552,6 +581,9 @@ class Schema
 		return $this;		
 	}
 
+	/*
+		No es autoinc
+	*/
 	function id(string $name = 'id'){		
 		$this->ubig($name);
 		$this->primary();
@@ -1890,6 +1922,10 @@ class Schema
 		return Model::sqlFormatter(Strings::removeMultipleSpaces($this->query), $sql_formatter);
 	}
 	
+	/*
+		Sino hay nada que alterar, deberia lanzar Exception
+		para evitar ejecutar migraciones vacias por error 
+	*/
 	function change()
 	{	
 		// dd($this->indices, 'INDICES');
@@ -2006,7 +2042,7 @@ class Schema
 			return;
 		}
 
-		$conn = DB::getConnection();   
+		DB::getConnection();   
 		
 		DB::beginTransaction();
 		try{
@@ -2018,17 +2054,16 @@ class Schema
 			
 			DB::commit();
 		} catch (\PDOException $e) {
-			DB::rollback();
 			dd($change, 'SQL');
 			dd($e->getMessage(), "PDO error");
 			throw $e;		
         } catch (\Exception $e) {
-            DB::rollback();
             throw $e;
-        } catch (\Throwable $e) {
-            DB::rollback();     
+        } catch (\Throwable $e) {  
 			throw $e;       
-        }     
+        } finally {
+			DB::rollback();     
+		}    
 	}	
 
 

@@ -17,10 +17,15 @@ function response($data = null, ?int $http_code = 200){
     return Factory::response($data, $http_code);
 }
 
-/*
-    "Alias"
-*/
-
 function error($error = null, ?int $http_code = null, $detail = null){
+    if (is_cli()){
+        if (!empty($detail)){
+            dd($detail, $error);
+        } else {
+            dd($error);
+        }
+       
+        exit;
+    }
     return Factory::response()->error($error, $http_code, $detail);
 }

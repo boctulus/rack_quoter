@@ -12,7 +12,7 @@ if (isset($_GET['credits'])){
     	$app_name = 'Plugin development';
 
     	if (function_exists('config')){
-    		$app_name = config()['app_name'] ?? $app_name;
+    		$app_name = Config::get()['app_name'] ?? $app_name;
     	} 
 		
         ?>

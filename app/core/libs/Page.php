@@ -2,8 +2,20 @@
 
 namespace boctulus\SW\core\libs;
 
+use boctulus\SW\core\libs\Url;
+
 class Page
 {
+    static function getCurrentPostID(){
+        $slugs = Url::getSlugs();
+            
+        $pid = Posts::getBySlug(
+            $slugs[count($slugs)-1]
+        )['ID'] ?? null; 
+
+        return $pid;
+    }
+
     /*
         Busca por coincidencias en url actual en page={page} y /page
     */
@@ -75,6 +87,24 @@ class Page
 
         Page::replaceContent(function(&$content){
             $content = preg_replace('/Mi cuenta/', "CuentaaaaaaaX", $content);
+        });
+
+        Otro ej:
+        
+        Page::replaceContent(function(&$content)
+        {
+            $pid = Page::getCurrentPostID();
+        
+            $pattern = '/<main id="main" class="">(.*?)<\/main>/s';
+            $content = preg_replace($pattern, '
+            <main id="main" class="">
+                    <center>
+                        <b>Contenido restringido!</b>
+                    </center>
+            </main>', $content);    
+
+            $pattern = '/<aside class="tutor-col-xl-4">(.*?)<\/aside>/s';
+            $content = preg_replace($pattern, "", $content);
         });
     */
     static function replaceContent(callable $callback){

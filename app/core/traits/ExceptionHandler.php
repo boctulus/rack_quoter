@@ -2,7 +2,9 @@
 
 namespace boctulus\SW\core\traits;
 
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\DB;
+use boctulus\SW\core\libs\Logger;
 
 trait ExceptionHandler
 {
@@ -19,7 +21,7 @@ trait ExceptionHandler
 
         $error_msg = $e->getMessage();
 
-        $config    = config();
+        $config    = Config::get();
        
         if ($config['debug']){
             $e      = new \Exception();
@@ -56,12 +58,12 @@ trait ExceptionHandler
             $error_location = 'Error on line number '.$e->getLine().' in file - '.$e->getFile();
 
             if ($config['log_stack_trace']){
-                log_error("Error: $error_msg. Trace: $backtrace");   
+                Logger::logError("Error: $error_msg. Trace: $backtrace");   
             } else{
-                log_error("Error: $error_msg");
+                Logger::logError("Error: $error_msg");
             }
 
-            error($error_msg, 500, $backtrace, $error_location);
+            error($error_msg, 500, $backtrace);
         } else {
             error($error_msg, 500);
         }

@@ -275,15 +275,15 @@ class Menus
         if ( is_admin() ) {
             add_action('admin_menu', function () {
                 
-                // Settings > MutaWP
+                // Settings > MyStore
                 Menus::options(
                     function() {
                         echo '<h1>Hola Mundo</h1>';
                     },
-                    'MutaWP Settings',
-                    'MutaWP',
+                    'MyStore Settings',
+                    'MyStore',
                     null,
-                    'mutawp-settings'
+                    'mystore-settings'
                 );    
 
             });

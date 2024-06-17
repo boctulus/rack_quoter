@@ -2,6 +2,8 @@
 
 namespace boctulus\SW\core\libs;
 
+use boctulus\SW\core\interfaces\MetaboxType;
+
 /*
     @author Pablo Bozzolo <boctulus@gmail.com>
 
@@ -15,7 +17,14 @@ namespace boctulus\SW\core\libs;
             'Att name 1',
             'Att name 2',
         ]);
+    
+    O si es solo uno...
 
+    Ej:
+
+        $mt = new Metabox( [
+            'explanation'
+        ], 'sfwd-question');
 
     # Se puede limitar la aparicion del Metabox a determina "screen"(que se corresponde a un "post_type")
 
@@ -25,16 +34,11 @@ namespace boctulus\SW\core\libs;
             ['explanation', 'Explicacion']
         ], 'sfwd-question');
 
-
-    # Se le puede pasar un nombre que sera distinto de la meta_key
-
-    Ej:
+    O enviando arrays asociativos
 
         $mt = new Metabox( [
-            ['explanation', 'Explicacion']
+            ['explanation' => 'Explicacion']
         ], 'sfwd-question');
-
-    <-- recomendado
 
 
     # Callback
@@ -50,12 +54,20 @@ namespace boctulus\SW\core\libs;
 
         $mt = new Metabox($atts);
 
-        $mt->setCallback('Ganancia %', function($pid, $meta_id, &$ganancia){
-            $price = posts::getMeta($pid, 'Precio TecnoGlobal');
+        $mt->setCallback('Ganancia %', function($pid, $meta_key, $meta_value, &$ganancia){
+            $price = Posts::getMeta($pid, 'Precio TecnoGlobal');
             $price = $price * (1 + 0.01* $ganancia);
 
             posts::updatePrice($pid, $price);
         });
+
+    Otro ejemplo:
+
+
+        $mt->setCallback('students_allowed_to_enroll' , function($pid, $meta_key, $meta_value){
+                Logger::log("CURSO PID=$pid < $meta_key > con valor $meta_value");
+        });
+
 
 
     # Read-only
@@ -80,7 +92,32 @@ namespace boctulus\SW\core\libs;
         $mt->setReadOnly([
             'Precio TecnoGlobal'
         ]);
+
+    # Tipo de Metabox
+
+    Ej:
+
+    $mt = new Metabox( [
+            ['students_allowed_to_enroll' => 'Usuarios admitidos (correos)']
+    ], 'courses', 'AREA');
+
+    En el caso anterior estamos diciendo que por defecto todos los campos seran de tipo TEXTAREA ("AREA") 
+    pero podemos asignar un tipo a un campo en particular:
+
+    $mt = new Metabox( [
+        ['brand' => 'Marca'],
+        ['quantity.min'  => 'Cant Min'],
+        ['quantity.step' => 'Cant Inc'],
+        ['quantity.unit' => 'Cant Unidad'],
+        ['in_t_days' => 'Envio en (t-dias)'],
+        ['shipping_text', 'Texto adjunto a cantidad (carrito)', 'AREA'],   ### TEXTAREA ###
+    ]);
+
+    Para lograrlo hemos pasado el tipo ("AREA") en un array NO-asociativo como tercer parametro.
+
+    * Actualmente se soportan (TEXT y AREA)
 */
+
 class Metabox
 {
     protected $meta_atts    = [];
@@ -89,15 +126,28 @@ class Metabox
 
     // 'post', 'page', .., 'post',... array()
     protected $screen       = null;
+    protected $default_type = MetaboxType::TEXT; // Default metabox type
 
-    function __construct(Array $meta_atts = [], $screen = null)
-    {   
-       
+    function __construct(Array $meta_atts = [], $screen = null, $default_type = 'TEXT')
+    {
         $this->setMetaAtts($meta_atts);
         $this->setScreen($screen);
+        $this->setDefaultType($default_type);
 
         add_action('add_meta_boxes', [$this, 'post_meta_box']);
         add_action('save_post', [$this, 'save_post_meta_box_data']);
+    }
+
+    // Element type (TEXT, TEXTAREA,...)
+    function setDefaultType($type)
+    {
+        // Check if the provided type is one of the supported types
+        if (!in_array($type, [MetaboxType::TEXT, MetaboxType::AREA])) {
+            throw new \InvalidArgumentException('Invalid metabox type');
+        }
+
+        $this->default_type = $type;
+        return $this;
     }
 
     function setMetaAtts(Array $meta_atts){
@@ -117,19 +167,11 @@ class Metabox
     /*
         Ej:
 
-        $mt = new Metabox( [
-            [
-                ['site_url', 'URL'],
-                ['site_ip',  'IP'],
-                ['site_name', 'Nombre'],  // <---- por alguna razon si el nombre contiene espacios falla al salvar
-            ]
-        ], 'wsevent');
+        'My campo',
 
-        $mt->setReadOnly([
-            'site_url',
-            'site_ip',
-            'site_name'
-        ]);
+        [
+            'readonly' => 'readonly'
+        ]
     */
     function setElementAtts($field, Array $atts){        
         $meta_key = $field;
@@ -161,7 +203,6 @@ class Metabox
     }
 
     function setCallback($meta_key, callable $callback){
-        $meta_key = $meta_key;
         $this->callbacks[$meta_key] = $callback;
     }
 
@@ -170,41 +211,56 @@ class Metabox
         $screen = $screen ?? $this->screen;
         
         foreach ($this->meta_atts as $meta){
-            if (!is_array($meta)){
-                $meta = [ $meta ];
+            if (is_array($meta)){  /// <---- enviar siempre como array de arrays
+                if (is_array($meta)) {
+                    $meta_id    = isset($meta[0]) ? $meta[0] : array_key_first($meta);
+                    $meta_title = isset($meta[1]) ? $meta[1] : $meta[$meta_id];
+                    $meta_type  = isset($meta[2]) ? $meta[2] : $this->default_type;
+                } else {
+                    $meta_id    = $meta;
+                    $meta_title = $meta;
+                    $meta_type  = $this->default_type;
+                }           
+            } else {
+                $meta_id    = $meta;
+                $meta_title = $meta;
+                $meta_type  = $this->default_type;
             }
 
-            foreach ($meta as $meta_row){
-                $meta_id    = $meta_row[0];
-                $meta_title = $meta_row[1];
+            $atts = '';
 
-                $atts = '';
-                if (isset($this->element_atts[$meta_id])){
-                    foreach ($this->element_atts[$meta_id] as $at => $at_val){
-                        $atts .= "$at = '$at_val' ";
-                    }
-                }
+            $meta_callback = function ($post) use ($meta_id, $meta_title, $meta_type, $atts) {
+                // Add a nonce field so we can check for it later.
+                wp_nonce_field( 'post_nonce', 'post_nonce' );
+                
+                $value = get_post_meta($post->ID, $meta_id, true);
 
-                $meta_callback = function ( $post ) use ($meta_id, $meta_title, $atts) {
-                    // Add a nonce field so we can check for it later.
-                    wp_nonce_field( 'post_nonce', 'post_nonce' );
-                    
-                    $value = get_post_meta($post->ID, '_'.$meta_id, true);
-                    $value  = esc_attr($value);
-            
-                    // Usar HTML helper idealmente
-                    echo "<textarea style=\"width:100%\" id=\"$meta_id\" name=\"$meta_title\" $atts>$value</textarea>";
-                };
+                // Mostrar en lineas separadas 
+                $value         = str_replace("\n", '&#13;&#10;', $value); // <---------- revisar esta parte
+                $textarea_rows = 4;
+                
+                $value = esc_attr($value);
         
-                add_meta_box(
-                    $meta_id,
-                    $meta_title,
-                    $meta_callback,
-                    $screen
-                );    
-            }
-           
+                // Usar HTML helper idealmente
+                switch ($meta_type) {
+                    case 'AREA':
+                        echo "<textarea style=\"width:100%\" id=\"$meta_id\" rows=\"$textarea_rows\" name=\"$meta_title\" $atts>$value</textarea>";
+                        break;
+                    default: // TEXT
+                        echo "<input type=\"text\" style=\"width:100%\" id=\"$meta_id\" name=\"$meta_title\" value=\"$value\" $atts>";
+                        break;
+                }
+            };
+    
+            add_meta_box(
+                $meta_id,
+                $meta_title,
+                $meta_callback,
+                $screen
+            );    
         }
+
+        // exit;
     }    
     
     /**
@@ -213,6 +269,8 @@ class Metabox
      * @param int $pid
      */
     function save_post_meta_box_data( $pid) {
+        // dd($_POST, 'POST'); exit;
+
         // Check if our nonce is set.
         if ( ! isset( $_POST['post_nonce'] ) ) {
             return;
@@ -229,15 +287,12 @@ class Metabox
         }
     
         // Check the user's permissions.
-        if ( isset( $_POST['post_type'] ) && 'page' == $_POST['post_type'] ) {
-    
+        if ( isset( $_POST['post_type'] ) && 'page' == $_POST['post_type'] ) {    
             if ( ! current_user_can( 'edit_page', $pid ) ) {
                 return;
-            }
-    
+            }    
         }
         else {
-    
             if ( ! current_user_can( 'edit_post', $pid ) ) {
                 return;
             }
@@ -246,27 +301,33 @@ class Metabox
         /* OK, it's safe for us to save the data now. */
     
         foreach ($this->meta_atts as $meta){
-            if (!is_array($meta)){
-                $meta = [ $meta ];
-            }
-
-            foreach ($meta as $meta_row){
-                $meta_id    = $meta_row[0];
-                $meta_title = $meta_row[1];
-
-                if (isset( $_POST[$meta_title])) {
-                    $data = sanitize_text_field( $_POST[$meta_title] );
-                    //dd($data, $meta_id);
-
-                    if (isset($this->callbacks[$meta_id])){
-                        $cb = $this->callbacks[$meta_id];
-                        $cb($pid, $meta_id, $data);
-                    }
-
-                    update_post_meta( $pid, "_{$meta_id}", $data ); 
+            if (is_array($meta)){  /// <---- enviar siempre como array de arrays
+                if (isset($meta[0])){
+                    $meta_id    = $meta[0];
+                    $meta_title = $meta[1];
+                } else {
+                    $meta_id    = array_key_first($meta);
+                    $meta_title = $meta[$meta_id];
                 }
+            } else {    
+                $meta_id    = $meta;
+                $meta_title = $meta;
             }
-        }    
+
+            $meta_title = str_replace(' ', '_', $meta_title);
+
+            if (isset( $_POST[$meta_title])) {
+                $data = sanitize_text_field( $_POST[$meta_title] );
+                //dd($data, $meta_id);
+
+                if (isset($this->callbacks[$meta_id])){
+                    $cb = $this->callbacks[$meta_id];
+                    $cb($pid, $meta_id, $data);
+                }
+
+                update_post_meta( $pid, $meta_id, $data ); 
+            }
+        }
     }
 }
 

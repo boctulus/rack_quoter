@@ -11,6 +11,49 @@ use boctulus\SW\core\libs\Arrays;
 
 class Url
 {    
+    /*
+     * Determines the boolean value of a query parameter.
+     *
+     * This function checks if a query parameter exists and evaluates its boolean value.
+     * It accepts a key corresponding to the query parameter name and an optional default value.
+     * The function returns true if the parameter value is 'on', 'yes', or '1',
+     * false if the parameter value is 'off', 'no', or '0', and the default value otherwise.
+     *
+     * @param string $key The name of the query parameter to check.
+     * @param bool $default (optional) The default value to return if the parameter is not set. Default is false.
+     * @return bool The boolean value of the query parameter.
+     *
+     * 
+        Ej:
+
+        $sku          = ['01004','17', '001', '01006'];
+        $sync_categos = Url::boolOption('C');
+        $inventory    = Url::boolOption('I');
+
+        try {
+            Sync::init($sync_categos, $sku ?? null, $inventory);
+        } catch (\Exception $e){
+            Logger::logError($e);
+        }
+     */
+    static function boolOption(string $key, bool $default = false){
+        if (!isset($_GET[$key])){
+            return $default;
+        }
+
+        $val = strtolower($_GET[$key]);
+
+        if (in_array($val, ['on', 'yes', '1'])){
+            return true;
+        }
+
+        if (in_array($val, ['off', 'no', '0'])){
+            return false;
+        }
+
+        return $default;
+    }
+
     static function validate(string $url){
         return filter_var($url, FILTER_VALIDATE_URL);
     }
@@ -33,13 +76,18 @@ class Url
         return false;
     }
     
+    static function isURL(string $url){
+        return Strings::startsWith('http://', $url) || Strings::startsWith('https://', $url);
+    }
+
     static function isValid(string $url){
-        if (!Strings::startsWith('http://', $url) && !Strings::startsWith('https://', $url)){
+        if (!static::isURL($url)){
             return false;
         }
 
         return filter_var($url, FILTER_VALIDATE_URL);
     }
+    
     /*
         Obtiene la url final luego de redirecciones
 
@@ -90,8 +138,20 @@ class Url
 
         $p['path'] = rtrim($p['path'], '/');
         $query     = isset($p['query']) ? "?{$p['query']}" : '';
+        $p['host'] = str_replace('//', '/', $p['host']);
 
         return "{$p['scheme']}://{$p['host']}{$p['path']}$query";
+    }
+
+    /*  
+        Convierte una url o slug de relativo a absoluta
+
+        Ej:
+
+        Url::toAbsolute('/WebRoot/StoreES2/Shops/63993920/Categories/Category1/../../MediaGallery/Categories/Category1/AMB_BLANCOS_30X60.jpg');
+    */
+    static function toAbsolute($url){
+        return Files::normalize($url, Files::LINUX_DIR_SLASH);
     }
 
     // Body decode
@@ -225,7 +285,7 @@ class Url
     }
 
     static function httpProtocol(){
-        $config = config();
+        $config = Config::get();
 
         if (isset($config['https']) && $config['https'] != null){
             $is_ssl = ($config['https'] && !strtolower($config['https']) == 'off');
@@ -388,6 +448,14 @@ class Url
             [x] => 3
             [y] => 4
         )
+
+        Se puede decir que:
+
+            $order = Url::getQueryParams($url)['order']; 
+
+        Es la inversa de:
+
+            $order_query = http_build_query(['order' => $order]
     */
     static function getQueryParams(string $url){
         $str = static::getQueryString($url);
@@ -437,6 +505,36 @@ class Url
         return $x;
     }
 
+    static function removeParam($url, $parameter) {
+        $urlParts = parse_url($url);
+    
+        if (isset($urlParts['query'])) {
+            parse_str($urlParts['query'], $params);
+
+            if (!isset($params[$parameter])){
+                return $url;
+            }
+    
+            unset($params[$parameter]);
+    
+            $newQuery = http_build_query($params);
+    
+            $urlParts['query'] = $newQuery;
+        }
+    
+        $newUrl = $urlParts['scheme'] . '://' . $urlParts['host'] . $urlParts['path'];
+    
+        if (isset($urlParts['fragment'])) {
+            $newUrl .= '#' . $urlParts['fragment'];
+        }
+    
+        if (isset($urlParts['query']) && !empty($urlParts['query'])) {
+            $newUrl .= '?' . $urlParts['query'];
+        }
+    
+        return $newUrl;
+    }
+
     static function encodeParams(array $data, string $numeric_prefix = "", ?string $arg_separator = '&', int $encoding_type = PHP_QUERY_RFC1738){
         return http_build_query($data, $numeric_prefix, $arg_separator, $encoding_type);
     }
@@ -479,7 +577,7 @@ class Url
     static function getHostname(?string $url = null, bool $include_protocol = false)
     {
         if (is_cli() && empty($url)){
-            return config()['app_url'];
+            return Config::get()['app_url'];
         }
 
         if (is_null($url)){

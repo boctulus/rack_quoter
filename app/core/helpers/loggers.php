@@ -1,13 +1,14 @@
 <?php
 
 use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Logger;
 
 /*
     Requiere que este habilitado el modo debug
 */
 function logger($data, ?string $path = null, $append = true){
-    if (!config()['debug']){
+    if (!Config::get('debug')){
         return;
     }
 
@@ -18,18 +19,18 @@ function logger($data, ?string $path = null, $append = true){
     Requiere que este habilitado el modo debug
 */
 function dump($object, ?string $path = null, $append = false){
-    if (!config()['debug']){
+    if (!Config::get('debug')){
         return;
     }
 
-    return Logger::dump($object, $path, $append);
+    return Files::dump($object, $path, $append);
 }
 
 /*
     Requiere que este habilitado el modo debug
 */
 function log_error($error){
-    if (!config()['debug']){
+    if (!Config::get('debug')){
         return;
     }
 
@@ -40,7 +41,9 @@ function log_error($error){
     Requiere que este habilitado el modo debug y log_sql
 */
 function log_sql(string $sql_str){
-    if (!config()['debug'] || !config()['log_sql']){
+    $cfg = Config::get();
+
+    if (!$cfg['debug'] || !$cfg['log_sql']){
         return;
     }
 

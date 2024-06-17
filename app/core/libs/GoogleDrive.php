@@ -28,7 +28,7 @@ class GoogleDrive
         Podria trabajar tambien on OAuth
     */
 	protected function __getClient($api_key = null){
-		$cfg = config();
+		$cfg = Config::get();
 
         $google_console_api_key = $this->api_key ?? $api_key ?? $cfg['google_console_api_key'];
 

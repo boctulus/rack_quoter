@@ -1,9 +1,15 @@
 <?php
 
+use boctulus\SW\core\libs\Env;
+
 use boctulus\SW\core\libs\Url;
+use boctulus\SW\core\Constants;
 use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Plugins;
 use boctulus\SW\core\libs\Strings;
+use boctulus\SW\core\libs\Templates;
+
 
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
@@ -11,6 +17,55 @@ use boctulus\SW\core\libs\Strings;
     Version: 1.5 (transitional)
 */
 
+/*
+    Para compatibilidad con SimpleRest ~~ok
+
+    Sin testear si pasa variables
+*/
+function render($content = null, $layout = null, $vars  = null){
+    if (empty(!$layout)){
+        set_template($layout);
+    }
+
+    if (!empty($vars)){
+        extract($vars);
+    }   
+
+    wp_head();
+    echo $content;
+    wp_footer();
+}
+
+/*
+    Para compatibilidad con SimpleRest ~~ok
+
+    Mientras que en SR $path es un archivo de template,
+    en SW es a un directorio
+
+    <-- en SR podria hacerse que si el PATH es un directorio
+    y ese directorio contiene un solo archivo .php lo cargue
+*/
+function set_template(string $path){
+    $_path = Templates::THEME_DIR . "$path";
+
+    if (!is_dir($_path)){
+        return;
+    }
+
+    Templates::set($path);
+}
+
+
+/*
+    Ej:
+
+    function rating_slider(){
+        $sc = new StarRatingShortcode();
+        return $sc->rating_slider();
+    }
+
+    set_shortcode('rating_slider');
+*/
 function set_shortcode($tag){
     $tag     = str_replace([
         '[', ']'
@@ -57,29 +112,34 @@ function plugin_name(){
 */
 function shortcode_asset($resource)
 {   
-    $protocol = is_cli() ? 'http' : httpProtocol();
-    
-    $resource = Strings::substract($resource, SHORTCODES_PATH);
-    $resource = str_replace('\\', '/', $resource);
+    $resource = Files::convertSlashes($resource, Files::LINUX_DIR_SLASH);
+
+    $resource = Strings::substract($resource, 
+        Files::normalize(Constants::SHORTCODES_PATH, Files::LINUX_DIR_SLASH)
+    );
+
     $resource = str_replace('/views/', '/assets/', $resource);
     
-    $base     = config()['base_url'] ?? '';
+    $base = Config::get('base_url') ?? '';
 
     if (Strings::endsWith('/', $base)){
         $base = substr($base, 0, -1); 
     }
+    
+    $protocol   = is_cli() ? 'http'              : httpProtocol();
+    $domain     = is_cli() ? Env::get('APP_URL') : $_SERVER['HTTP_HOST'];
 
-    $url  = $protocol . '://' . ($_SERVER['HTTP_HOST'] ?? env('APP_URL')) . '/wp-content/plugins/' . Plugins::currentName()  . '/app/shortcodes/';
-    $url .= $resource;
+    $f          = explode('/', str_replace('\\', '/', __DIR__));
+    $plugin_dir = $f[count($f)-4];
 
-    $url = Files::normalize($url, '/');
+    $url = "$protocol://$domain/wp-content/plugins/$plugin_dir/app/shortcodes/$resource";
 
     return $url;    
 }
 
 function assets_url(?string $resource = null){    
     if (Files::isAbsolutePath($resource)){
-        $resource =  Strings::substract($resource, ROOT_PATH);
+        $resource =  Strings::substract($resource, Constants::ROOT_PATH);
     } else {
         $resource = 'assets/' . $resource;
     }
@@ -101,13 +161,13 @@ function asset(string $resource){
     return assets_url($resource);
 }
 
-function css_file(string $src, $dependencies = [], $version = null, $media = 'all'){
-	$src    = ltrim($src, '/\\');
-	$handle = $src;
+function css_file(string $src, $dependencies = [], $version = null, $media = 'all', $handle = null){
+    $src    = ltrim($src, '/\\');
+    $handle = $handle ?? $src;
 
-	if (!Strings::startsWith('http', $src)){
-		$src = asset($src);
-	}
+    if (!Strings::startsWith('http', $src)){
+        $src = asset($src);
+    }
 
     if ($version === null && !Strings::contains('third_party', $src)){
         $version = 'asset-' . Plugins::getVersion();
@@ -117,24 +177,24 @@ function css_file(string $src, $dependencies = [], $version = null, $media = 'al
     //     $handle, $src 
     // ]);
     
-	wp_register_style($handle, $src, $dependencies, $version, $media);
-	wp_enqueue_style($handle);
+    wp_register_style($handle, $src, $dependencies, $version, $media);
+    wp_enqueue_style($handle);
 }
 
-function js_file(string $src, bool $in_head = false, $dependencies = [], $version = null){
-	$src    = ltrim($src, '/\\');
-	$handle = $src;
+function js_file(string $src, bool $in_head = false, $dependencies = [], $version = null, $handle = null){
+    $src    = ltrim($src, '/\\');
+    $handle = $handle ?? $src;
 
-	if (!Strings::startsWith('http', $src)){
-		$src = asset($src);
-	}
+    if (!Strings::startsWith('http', $src)){
+        $src = asset($src);
+    }
 
     if ($version === null && !Strings::contains('third_party', $src)){
         $version = 'asset-' . Plugins::getVersion();
     }
 
-	wp_register_script($handle, $src, $dependencies, $version, !$in_head);
-	wp_enqueue_script($handle);
+    wp_register_script($handle, $src, $dependencies, $version, !$in_head);
+    wp_enqueue_script($handle);
 }
 
 // Función para agregar código JavaScript inline en temas y plugins

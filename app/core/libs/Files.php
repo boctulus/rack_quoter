@@ -1,12 +1,10 @@
 <?php
 
-/*
-	@author boctulus
-*/
-
 namespace boctulus\SW\core\libs;
 
-use boctulus\SW\core\libs\Strings;
+use boctulus\SW\core\libs\System;
+use boctulus\SW\core\libs\Logger;
+use boctulus\SW\core\libs\SortedIterator;
 
 class Files 
 {
@@ -81,6 +79,10 @@ class Files
 		header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
 		header('Pragma: public');
 		header('Content-Length: ' . filesize($file));
+
+		// Clean up output buffer before writing anything to a file.
+		ob_end_clean();
+
 		@readfile($file);
 		exit;
 	}
@@ -99,29 +101,35 @@ class Files
 		return ini_get('allow_url_fopen');
 	}
 
-	/*
-		https://www.codewall.co.uk/write-php-array-to-csv-file/
-		https://fuelingphp.com/how-to-convert-associative-array-to-csv-in-php/
-	*/
-	static function arrayToCSV(string $filename, Array $array){
-		if (!Strings::endsWith('.csv', strtolower($filename))){
+	static function arrayToFile(string $filename, array $array){
+		file_put_contents($filename, implode(PHP_EOL, $array));
+	}
+
+	static function arrayToCSV(string $filename, array $array, bool $header = true, string $separator = ",")
+	{
+		if (!Strings::contains('.', strtolower($filename))){
 			$filename .= '.csv';
 		}
 
-		$f = fopen($filename, 'a'); // Configure fopen to create, open, and write data.
+		$f = fopen($filename, 'w'); 
  
-		fputcsv($f, array_keys($array[0])); // Add the keys as the column headers
+		if ($header){			
+			fputcsv($f, array_keys($array[0]), $separator); 
+		}
+
+		fclose($f);
+
+		$f = fopen($filename, 'a'); 
 		
-		// Loop over the array and passing in the values only.
 		foreach ($array as $row)
 		{
-			fputcsv($f, $row);
+			fputcsv($f, $row, $separator );
 		}
-		// Close the file
+
 		fclose($f);
 	}
 
-	static function getCSV(string $path, string $separator = ",", bool $header = true, bool $assoc = true, $header_defs = null){	
+	static function getCSV(string $path, string $separator = ",", bool $header = true, bool $assoc = true){	
 		$rows = [];
 
 		ini_set('auto_detect_line_endings', 'true');
@@ -131,13 +139,12 @@ class Files
 		if ($header){
 			$cabecera = fgetcsv($handle, null, $separator);
 			$ch       = count($cabecera);
+
+			foreach ($cabecera as $ix => $row){				
+				$cabecera[$ix] = Strings::sanitize($row);
+			}
 		}  else {
 			$assoc    = false;
-		}
-
-		// Puedo re-definir
-		if ($header_defs != null){
-			$cabecera = $header_defs;
 		}
 		
 		$i = 0;
@@ -167,6 +174,190 @@ class Files
 
 		return $rows;		
 	}
+
+	/*
+        Procesa archivo CSV row a row
+
+        @author Pablo Bozzolo
+
+        Ej:
+
+        Files::processCSV($path, ',', true, function($row){
+            // Procesamiento del row
+            dd($row, 'ROW');
+        });
+
+		o si el archivo no tiene cabecera se la puede especificar:
+
+		Files::processCSV($archivo, ';', false, function($p) { 
+			dd($p, 'P (por procesar)');
+		}, [
+			'sku',
+			'stock',
+			'price',
+			'sale_price'
+		]);
+
+		y aun si la tiene se pueden redefinir algunos campos:
+
+		Files::processCSV($archivo, ';', true, function($p) { 
+			dd($p, 'P (por procesar)');
+		}, [
+			'SKU'            => 'sku',
+			'stock_quantiy'  => 'stock',
+			'discount_price' => 'sale_price'
+		]);
+
+		Admite offset y limit
+
+		Ej:
+		
+		Files::processCSV($archivo, ';', false, function($p) { 
+			dd($p, 'P (por procesar)');
+		}, [
+			'sku',
+			'stock',
+			'price',
+			'sale_price'
+		],36332,5);  
+
+		o si el archivo tiene ya cabecera entonces asi:
+
+		Files::processCSV($archivo, ';', true, function($p) { 
+			dd($p, 'P (por procesar)');
+		}, null ,36332,5); 
+
+    */
+	
+	static function processCSV(string $path, string $separator = ",", bool $header = true, ?callable $fn = null, $header_defs = null, $start_line = 0, $limit = false, bool $replace_spaces = true, bool $lowecase = false)
+    {
+        $handle = fopen($path, 'r');
+
+        if (!$handle) {
+            return;
+        }
+
+        if ($header) {
+            $cabecera = fgetcsv($handle, null, $separator);
+            $ch       = count($cabecera);
+
+			foreach ($cabecera as $ix => $row){				
+				$cabecera[$ix] = Strings::sanitize($row);
+
+				// Normalizacion
+				if ($lowecase){
+					$cabecera[$ix] = strtolower($cabecera[$ix]);
+				}
+				
+				// Normalizacion
+				if ($replace_spaces){
+					$cabecera[$ix] = str_replace(' ', '-', $cabecera[$ix]);
+				}				
+			}
+
+            $assoc = true;
+        } else {
+            $assoc = false;
+        }
+
+		// Avanzar hasta la línea de inicio
+		for ($i = 0; $i < $start_line; $i++) {
+			fgets($handle);
+		}
+
+        // Puedo re-definir
+        if ($header_defs != null) {
+            $assoc = true;
+
+            if (isset($cabecera) && !empty($cabecera)) {
+                foreach ($cabecera as $ix => $key) {
+                    if ($assoc) {
+                        // Si es un array asociativo, verifica si la columna actual está definida
+                        $head_key = isset($header_defs[$key]) ? $header_defs[$key] : $key;
+                    } else {
+                        // Si no es asociativo, verifica si la columna por posición está definida
+                        $head_key = isset($header_defs[$ix]) ? $header_defs[$ix] : $key;
+                    }
+                    $cabecera[$ix] = $head_key;
+                }
+            } else {
+                $cabecera = $header_defs;
+            }
+
+            $ch = count($cabecera);
+        }
+
+        $count = 0;
+
+        // loop through the file line-by-line
+        while (($data = fgetcsv($handle, null, $separator)) !== false) {
+			$line = '';
+			foreach ($data as $k => $val){
+				if (empty($val)){
+					continue;
+				}
+
+				$line .= trim($val);
+			}
+
+			if (empty($line)){
+				continue;
+			}
+
+            $row = [];
+            if ($assoc) {
+                for ($j = 0; $j < $ch; $j++) {
+                    $head_key = $cabecera[$j];
+                    $val = $data[$j] ?? '';
+
+                    $row[$head_key] = $val;
+                }
+            } else {
+                $row = $data;
+            }
+
+            // Ejecuto callback
+            if (empty($row)){
+				continue;
+			}
+
+			call_user_func($fn, $row);
+
+            unset($data);
+
+            $count++;
+
+            // Verificar si se alcanzó el límite
+            if ($limit !== false && $limit !== null && $count >= $limit) {
+                break;
+            }
+        }
+
+        fclose($handle);
+    }
+
+	/*
+		Cuenta la cantidad de lineas de un archivo de texto
+	*/
+	static function countLines(string $path): int
+	{
+		$handle = fopen($path, 'r');
+
+		if (!$handle) {
+			return 0;
+		}
+
+		$line_count = 0;
+		while (!feof($handle)) {
+			fgets($handle);
+			$line_count++;
+		}
+
+		fclose($handle);
+
+		return $line_count;
+	}
+	
 
 	/*
 		Hace un "diff" entre dos rutas de archivos
@@ -251,6 +442,7 @@ class Files
 	 * @return string La ruta normalizada.
 	 */
 	static function normalize($path, $to_slash = null){
+		$path = str_replace('\/', '/', $path);
 		$path = str_replace('\\', '/', $path);
 
 		$segmentos = explode('/', $path);
@@ -376,6 +568,10 @@ class Files
 					unset($entries[$ix]);
 				}
 			}
+		}
+
+		foreach ($entries as $ix => $entry){
+			$entries[$ix] = realpath($entry);
 		}
 
 		return $entries;
@@ -804,8 +1000,11 @@ class Files
 		@return bool
 	*/
 	static function delete(string $file){
-		$file = realpath($file);		
-		return @unlink($file);
+		$file = realpath($file);	
+		
+		if (file_exists($file)){
+            return unlink($file);
+        }
 	}
 
 	/*
@@ -930,7 +1129,7 @@ class Files
 		}
 
 		if (!$include_self){
-			return static::globDelete($dir, '{*,.*,*.*}', true, true);
+			return static::globDelete($dir, '{*,.*,*.*}', true);
 		}
 		
 		/*
@@ -987,13 +1186,13 @@ class Files
 		rmdir($dir);
 	}
 	
-	static function mkDirOrFail(string $dir, int $permissions = 0777, $recursive = true, string $error = "Failed trying to create %s"){
+	static function mkDirOrFail(string $dir, int $permissions = 0777, $recursive = true){
 		$ok = null;
 
 		if (!is_dir($dir)) {
 			$ok = @mkdir($dir, $permissions, $recursive);
 			if ($ok !== true){
-				throw new \Exception(sprintf($error, $dir));
+				throw new \Exception("Error trying to create '$dir'");
 			}
 		}
 
@@ -1050,8 +1249,6 @@ class Files
 				return static::isDirectoryWritable($dir);
 			}
 		}
-
-		return static::isFileWritable($path);
 	}
 
 	static function isDirectoryWritable(string $directory)
@@ -1125,17 +1322,14 @@ class Files
 	/*
 		Escribe archivo o falla.
 	*/
-	static function writeOrFail(string $path, $content, int $flags = 0){
+	static function writeOrFail(string $path, $content, int $flags = 0, $context = null)
+	{
 		if (is_dir($path)){
 			$path = realpath($path);
 			throw new \InvalidArgumentException("$path is not a valid file. It's a directory!");
 		} 
 
 		$dir = static::getDir($path);
-
-		if (!file_exists($path)){	
-			static::mkDirOrFail($dir);
-		}
 
 		static::writableOrFail($dir);
 
@@ -1148,17 +1342,30 @@ class Files
 			$string = implode(PHP_EOL, $content);
 		} 
 
-		$bytes = @file_put_contents($path, $string, $flags);
+		$bytes = @file_put_contents($path, $string, $flags, $context);
 
 		return $bytes;
 	}
 
 	static function append(string $path, string $string, $add_newline_before = true) : bool {
-		return static::write($path, ($add_newline_before ? Strings::carriageReturn($path) : "") . $string, FILE_APPEND);
+		switch ($add_newline_before){
+			case false:
+				$cr = '';
+				break;
+			case true:
+				$cr = PHP_EOL;
+				break;
+			case 'AUTO':
+				$cr = Strings::carriageReturn($path);
+		}
+
+		return static::write($path, $string . $cr, FILE_APPEND);
 	}
 
 	static function appendOrFail(string $path, string $string, $add_newline_before = true){
-		static::writeOrFail($path, ($add_newline_before ? Strings::carriageReturn($path) : "") . $string, FILE_APPEND);
+		if (static::append($path, $string, $add_newline_before) == false){
+			throw new \Exception("Failed to Write File");
+		}
 	}
 	
 	/*
@@ -1171,23 +1378,22 @@ class Files
 
 	/*
 		https://tqdev.com/2018-locking-file-cache-php
+
+		"file_put_contents con locking"
 	*/
-	static function file_put_contents_locking(string $filename, string $string, int $flags = LOCK_EX)
+	static function writter(string $filename, string $string, int $flags = LOCK_EX)
 	{
 		return file_put_contents($filename, $string, $flags);
 	}
 
-	// alias
-	static function writter(string $filename, string $string, int $flags = LOCK_EX){
-		return static::file_put_contents_locking($filename,$string, $flags);
-	}
-
 	/*
 		https://tqdev.com/2018-locking-file-cache-php
+
+		"file_get_contents con locking"
 	*/
-	static function file_get_contents_locking(string $filename, int $flags = LOCK_SH)
+	static function reader(string $filename, $mode = 'rb', $block_size = 8192, int $flags = LOCK_SH)
 	{
-		$file = fopen($filename, 'rb');
+		$file = fopen($filename, $mode);
 
 		if ($file === false) {
 			return false;
@@ -1202,18 +1408,13 @@ class Files
 		
 		$string = '';
 		while (!feof($file)) {
-			$string .= fread($file, 8192);
+			$string .= fread($file, $block_size);
 		}
 		
 		flock($file, LOCK_UN);
 		fclose($file);
 		
 		return $string;
-	}
-
-	// alias
-	static function reader(string $filename, int $flags = LOCK_SH){
-		return static::file_get_contents_locking($filename, $flags);
 	}
 
 	static function read(string $path, bool $use_include_path = false, $context = null, int $offset = 0, $length = null){
@@ -1276,8 +1477,12 @@ class Files
 		return static::writeOrFail($filename, '', $flags) !== false;
 	}
 
+	static function tempDir(){
+		return Config::get('tmp_dir');
+	}
+
 	static function getTempFilename(?string $extension = null){
-		return sys_get_temp_dir(). DIRECTORY_SEPARATOR . Strings::randomString(60, false). ".$extension";
+		return static::tempDir(). DIRECTORY_SEPARATOR . Strings::randomString(60, false). ".$extension";
 	}
 
 	static function saveToTempFile($data, ?string $filename = null, $flags = null, $context = null){
@@ -1374,14 +1579,81 @@ class Files
 	static function getExtension(string $file){
 		return Strings::beforeIfContains(pathinfo($file, PATHINFO_EXTENSION), '?');
 	}
-}   
-    
 
+	static function varExport($data, string $path, $variable = null){
+		if ($variable === null){
+			$bytes = Files::writeOrFail($path, '<?php '. "\r\n\r\n" . 'return ' . var_export($data, true). ';');
+		} else {
+			if (!Strings::startsWith('$', $variable)){
+				$variable = '$'. $variable;
+			}
+			
+			$bytes = Files::writeOrFail($path, '<?php '. "\r\n\r\n" . $variable . ' = ' . var_export($data, true). ';');
+		}
 
+		return ($bytes > 0);
+	}
 
+	static function JSONExport($data, string $path, bool $pretty = false){
+		if (is_dir($path)){
+			$path = Strings::trimTrailingSlash($path) . DIRECTORY_SEPARATOR . 'export.json';
+		}
 
+		$flags = JSON_UNESCAPED_SLASHES;
 
+		if ($pretty){
+			$flags = $flags|JSON_PRETTY_PRINT;
+		}
 
+		$bytes = Files::writeOrFail($path, json_encode($data, $flags));
+		return ($bytes > 0);
+	}
 
+	static function dump($object, string $path = null, $append = false){
+		if (is_dir($path)){
+			$path = Strings::trimTrailingSlash($path) . DIRECTORY_SEPARATOR . 'dump.txt';
+		} else {
+			if (!static::isAbsolutePath($path)){
+				$path = ETC_PATH . $path;
+			}	
+		}
+
+		if ($append){
+			Files::writeOrFail($path, var_export($object,  true) . "\n", FILE_APPEND);
+		} else {
+			Files::writeOrFail($path, var_export($object,  true) . "\n");
+		}		
+	}
+
+	/*
+		Ej:
+
+		$search  = 'boctulus\SW\\';
+		$replace = 'boctulus\\SW\\';
+
+		Files::searchAndReplaceInFiles(APP_PATH, '*.php', $search, $replace);
+	*/
+	static function searchAndReplaceInFiles($directory, $filePattern, $searchString, $replaceString) {
+		$files = static::recursiveGlob("$directory/$filePattern", GLOB_BRACE);
+	
+		foreach ($files as $file) {
+			if (is_file($file)) {
+				$content = file_get_contents($file);
+				$updatedContent = str_replace($searchString, $replaceString, $content);
+	
+				if ($content !== $updatedContent) {
+					file_put_contents($file, $updatedContent);
+					StdOut::pprint("Replaced in file: $file");
+				}
+			} elseif (is_dir($file)) {
+				static::searchAndReplaceInFiles($file, $filePattern, $searchString, $replaceString);
+			}
+		}
+	}
+
+	static function toArray(string $filename, $flags = FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES){
+		return file($filename, $flags);
+	}
+}  
 
 

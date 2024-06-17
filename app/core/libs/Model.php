@@ -2,18 +2,21 @@
 
 namespace boctulus\SW\core\libs;
 
-use PDO;
 use boctulus\SW\core\libs\DB;
 use boctulus\SW\core\libs\Arrays;
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Factory;
 use boctulus\SW\core\libs\Strings;
 use boctulus\SW\core\libs\Paginator;
 use boctulus\SW\core\libs\Validator;
+use boctulus\SW\core\libs\ValidationRules;
+use boctulus\SW\core\interfaces\IValidator;
+use boctulus\SW\core\exceptions\SqlException;
+use boctulus\SW\core\interfaces\ITransformer;
 use boctulus\SW\core\traits\ExceptionHandler;
-
-
-class Model 
-{
+use boctulus\SW\core\exceptions\InvalidValidationException;
+             
+class Model {
 	use ExceptionHandler;
 
 	// for internal use
@@ -24,7 +27,7 @@ class Model
 	// Schema
 	protected $schema;
 
-	protected $fillable = [];
+	protected $fillable     = [];
 	protected $not_fillable = [];
 	protected $hidden   = [];
 	protected $attributes = [];
@@ -49,7 +52,6 @@ class Model
 	protected $where_raw_vals  = [];
 	protected $having_raw_q;
 	protected $having_raw_vals = [];
-	protected $having_group_op = [];
 	protected $table_raw_q;
 	protected $from_raw_vals   = [];
 	protected $union_q;
@@ -62,6 +64,7 @@ class Model
 	protected $to_merge_bindings = [];
 	protected $last_pre_compiled_query;
 	protected $last_bindings = [];
+	protected $last_compiled_sql;
 	protected $limit;
 	protected $offset;
 	protected $pag_vals = [];
@@ -84,6 +87,8 @@ class Model
 	protected $current_operation;
 	protected $insert_vars = [];
 	protected $data = []; 
+
+	protected $having_group_op;
 	protected $config;
 
 	protected $createdAt = 'created_at';
@@ -95,8 +100,50 @@ class Model
 	protected $is_locked = 'is_locked';
 	protected $belongsTo = 'belongs_to';
 
+	/*	
+		Nombres de los campos
+
+		Ej:
+
+		[
+			"created_at" => "Created At",
+			// ...
+		]
+	*/
+	protected        $field_names = [];
+
+	/*
+		Solo como indicaicon para el FrontEnd
+	*/
+	protected 		 $field_order = [];
+
+	/*
+		Aca se especificaria si es un checkbox o radiobox por ejemplo
+
+		Para tipo "dropdown" o "list" se utilizarian los valores de la regla de validacion
+		o de la tabla relacionada 
+
+		Tambien otros formatters que puedan estar disponibles en el frontend
+	*/
+	protected        $formatters = [];
+
 	static protected $sql_formatter_callback;
-	protected $sql_formatter_status;
+	protected        $sql_formatter_status;
+	
+	static protected $current_sql;
+
+
+	function getFieldNames(){
+		return $this->field_names;
+	}
+
+	function getformatters(){
+		return $this->formatters;
+	}
+
+	function getHidden(){
+		return $this->hidden;
+	}
 
 	function createdAt(){
 		return $this->createdAt;
@@ -153,13 +200,13 @@ class Model
 		static::$sql_formatter_callback = $fn;
 	}
 
-	function sqlFormaterOff(){
+	function sqlformatterOff(){
 		$this->sql_formatter_status = false;
 
 		return $this;
 	}
 
-	function sqlFormaterOn(){
+	function sqlformatterOn(){
 		$this->sql_formatter_status = true;
 
 		return $this;
@@ -179,6 +226,8 @@ class Model
 	{
 		$this->boot();
 
+		$this->prefix = DB::getTablePrefix();
+
 		// static::$sql_formatter_callback = function(string $sql, bool $highlight = false){
 		// 	return \SqlFormatter::format($sql, $highlight);
 		// };
@@ -193,13 +242,12 @@ class Model
 		}
 
 		if ($load_config){
-			$this->config = config();
+			$this->config = Config::get();
 
 			if ($this->config['error_handling']) {
 				set_exception_handler([$this, 'exception_handler']);
 			}
 		}
-		
 		
 		if ($this->schema == null){
 			return;
@@ -210,27 +258,10 @@ class Model
 		if (in_array('', $this->attributes, true)){
 			throw new \Exception("An attribute is invalid");
 		}
-		
 
-		if ($this->fillable == NULL){
+		if ($this->fillable == null){
 			$this->fillable = $this->attributes;
-			$this->unfill([
-							$this->is_locked, 
-							$this->belongsTo,
-							$this->createdAt,							
-							$this->updatedAt, 							
-							$this->deletedAt, 
-							$this->createdBy, 
-							$this->updatedBy, 
-							$this->deletedBy
-			]);	
 		}
-
-		$this->unfill($this->not_fillable);
-
-		// dd($this->not_fillable, 'NOT FILLABLE');
-		// dd($this->getFillables(), 'FILLABLES');
-		// exit;
 
 		$this->schema['nullable'][] = $this->is_locked;		
 		$this->schema['nullable'][] = $this->createdAt;
@@ -248,19 +279,15 @@ class Model
 
 		$to_fill = [];
 
-		if (!empty($this->schema['id_name'])){
-			$to_fill[] = $this->schema['id_name'];
-		}
-
-		// if ($this->inSchema([$this->createdBy])){
-		// 	$to_fill[] = $this->createdBy;
-		// }
-
-		// if ($this->inSchema([$this->updatedBy])){
-		// 	$to_fill[] = $this->updatedBy;
+		// if (!empty($this->schema['id_name'])){
+		// 	$to_fill[] = $this->schema['id_name'];
 		// }
 
 		$this->fill($to_fill);		
+
+		$this->unfill([ 
+			$this->id() 
+		]);
 		
 		$this->soft_delete = $this->inSchema([$this->deletedAt]);
 
@@ -287,6 +314,21 @@ class Model
 				$this->schema['rules'][$field]['required'] = true;
 			}
 		}
+
+		//dd($this->not_fillable, 'NF');
+
+		/*
+			Remuevo los campos no-fillables de los fillables
+		*/
+		foreach ($this->not_fillable as $f){
+			$pos = array_search($f, $this->fillable);
+			
+			if ($pos !== false){
+				unset($this->fillable[$pos]);
+			}
+		}
+
+		//$this->setValidator(new Validator());
 
 		// event handler
 		$this->init();
@@ -328,8 +370,12 @@ class Model
 		return $field;
 	} 
 
+	function addRules(ValidationRules $vr){
+		$this->schema['rules'] = array_merge($this->schema['rules'], $vr->getRules());
+	}
+
 	function noValidation(){
-		$this->validator = [];
+		$this->validator = null;
 		return $this;
 	}
 
@@ -363,7 +409,7 @@ class Model
 	}
 
 	// acepta un Transformer
-	function registerTransformer($t, $controller = NULL){
+	function registerTransformer(ITransformer $t, $controller = NULL){
 		$this->unhideAll();
 		$this->transformer = $t;
 		$this->controller  = $controller;
@@ -468,6 +514,11 @@ class Model
 		}
 	}
 
+	function setValidator(?IValidator $validator = null){
+		$this->validator = $validator;
+		return $this;
+	}
+
 	function setTableAlias(string $tb_alias, ?string $table = null){
 		if ($table === null){
 			$table = $this->table_name;
@@ -517,7 +568,8 @@ class Model
 		return $this;
 	}
 
-	function table(string $table, $table_alias = null) : Model
+	// set table and alias
+	function table(string $table, $table_alias = null)
 	{
 		$this->table_name          = $table;
 		$this->table_alias[$table] = $table_alias;
@@ -535,16 +587,16 @@ class Model
 		return $this->table($table, $table_alias);		
 	}
 
-	function prefix(?string $prefix = ''){
+	function prefix($prefix = ''){
 		$this->prefix     = $prefix;
 		return $this;
 	}
 
 	// alias for prefix()
-	function setPrefix(string $prefix){
+	function setPrefix($prefix = ''){
 		return $this->prefix($prefix);
 	}
-
+	
 	function removePrefix(string $prefix){
 		$table = Strings::after($this->table_name, $prefix);
 		$this->table($table);	
@@ -605,8 +657,11 @@ class Model
 	 * @return void
 	 */
 	function hide(array $fields){
-		foreach ($fields as $f)
-			$this->hidden[] = $f;
+		foreach ($fields as $f){
+			if (!in_array($f, $this->hidden)){
+				$this->hidden[] = $f;
+			}
+		}
 
 		return $this;	
 	}
@@ -621,8 +676,39 @@ class Model
 	 * @return object
 	 */
 	function fill(array $fields){
-		foreach ($fields as $f)
-			$this->fillable[] = $f;
+		foreach ($fields as $f){
+			if (!in_array($f, $this->fillable)){
+				$this->fillable[] = $f;
+			}
+		
+			/*
+				Remuevo los campos fillables del array de los no-fillables	
+			*/
+			$pos = array_search($f, $this->not_fillable);
+			
+			if ($pos !== false){
+				unset($this->not_fillable[$pos]);
+			}
+		}
+
+		return $this;	
+	}
+
+	function unfill(array $fields){
+		foreach ($fields as $f){
+			if (!in_array($f, $this->not_fillable)){
+				$this->not_fillable[] = $f;
+			}
+
+			/*
+				Remuevo los campos no-fillables del array de los fillables	
+			*/
+			$pos = array_search($f, $this->fillable);
+			
+			if ($pos !== false){
+				unset($this->fillable[$pos]);
+			}
+		}
 
 		return $this;	
 	}
@@ -631,7 +717,9 @@ class Model
 		Make all fields fillable
 	*/
 	function fillAll(){
-		$this->fillable = $this->attributes;
+		$this->fillable     = $this->attributes;
+		$this->not_fillable = [];
+
 		return $this;	
 	}
 	
@@ -643,7 +731,7 @@ class Model
 	 *
 	 * @return void
 	 */
-	function unfill(array $fields){
+	protected function unfillAll(array $fields){
 		if (!empty($this->fillable) && !empty($fields)){		
 			foreach ($this->fillable as $ix => $f){
 				foreach ($fields as $to_unset){
@@ -661,6 +749,7 @@ class Model
 
 		return $this;
 	}
+	
 
 	// INNER | LEFT | RIGTH JOIN
 	function join($table, $on1 = null, $op = '=', $on2 = null, string $type = 'INNER JOIN')
@@ -674,9 +763,17 @@ class Model
 			$this_alias = $matches[2];
 		}
 
-		$on_replace = function(string &$on) use ($this_alias, $table)
+		$on_replace = function(&$on) use ($this_alias, $table)
 		{	
+			if (empty($on)){
+				throw new \InvalidArgumentException("Paramter 1 in on_replace can not be null or empty");
+			}
+
 			$_on = explode('.', $on);
+
+			if (count($_on) != 2){
+				throw new \InvalidArgumentException("Paramter 1 format in on_replace is not well-formatted.");
+			}
 			
 			if (isset($this->table_alias[$this->table_name])){
 				if ($_on[0] ==  $this->table_name){
@@ -880,6 +977,17 @@ class Model
 		return $this->offset($n);
 	}
 
+	function paginate(int $page, ?int $page_size = null){
+		if ($page_size === null){
+			$page_size = Config::get()['paginator']['default_limit'] ?? 10;
+		}
+
+		$this->limit  = $page_size;
+        $this->offset = Paginator::calcOffset($page, $page_size);
+
+		return $this;
+	}
+
 	function groupBy(array $g){
 		$this->group = array_merge($this->group, $g);
 		return $this;
@@ -889,7 +997,7 @@ class Model
 		$this->randomize = true;
 
 		if (!empty($this->order))
-			throw new \Exception("Random order is not compatible with OrderBy clausule");
+			throw new SqlException("Random order is not compatible with OrderBy clausule");
 
 		return $this;
 	}
@@ -1158,8 +1266,8 @@ class Model
 						$paginator->compile();
 
 						$this->pag_vals = $paginator->getBinding();
-					}catch (\Exception $e){
-						throw new \Exception("Pagination error: {$e->getMessage()}");
+					}catch (SqlException $e){
+						throw new SqlException("Pagination error: {$e->getMessage()}");
 					}
 				}else{
 					$paginator = null;
@@ -1243,8 +1351,9 @@ class Model
 		// Validación
 		if (!empty($this->validator)){
 			$validado = $this->validator->validate(array_combine($vars, $values), $this->getRules());
+
 			if ($validado !== true){
-				throw new \Exception(json_encode(
+				throw new InvalidValidationException(json_encode(
 					$this->validator->getErrors()
 				));
 			} 
@@ -1543,11 +1652,25 @@ class Model
 			return; //
 		}
 
+		/*
+			La idea es poder accederlo desde el Error Handler por ejemplo
+			en caso de ser necesario
+
+			Se supone que cualquier SQL generado y ejecutado sera bindeado
+			asi que debe de pasar por este lugar 
+			
+			(excepto claro que se use la clase DB directamente)
+		*/
+
+		static::$current_sql = $q;
+
 		try {
 			$st = $this->conn->prepare($q);			
 		} catch (\Exception $e){
 			$vals_str = implode(',', $vals);
-			throw new \Exception("Query '$q' - and vals = [$vals_str] | ". $e->getMessage());
+
+			$this->logSQL();
+			throw new SqlException("Query '$q' - and vals = [$vals_str] | ". $e->getMessage());
 		}
 		
 		foreach($vals as $ix => $val)
@@ -1572,8 +1695,7 @@ class Model
 			elseif(is_array($val)){
 				throw new \Exception("where value can not be an array!");				
 			}else {
-				var_dump($val);
-				throw new \Exception("Unsupported type");
+				throw new \Exception("Unsupported type: " . var_export($val, true));
 			}	
 
 			$st->bindValue($ix +1 , $val, $type);
@@ -1602,8 +1724,8 @@ class Model
 		foreach($bindings as $ix => $val){			
 			if(is_null($val)){
 				$bindings[$ix] = 'NULL';
-			}elseif(isset($vars[$ix]) && isset($this->schema['attr_types'][$vars[$ix]])){
-				$const = $this->schema['attr_types'][$vars[$ix]];
+			}elseif(isset($vars[$ix]) && isset($this->schema['attr_types'][$val])){
+				$const = $this->schema['attr_types'][$val];
 				if ($const == 'STR')
 					$bindings[$ix] = "'$val'";
 			}elseif(is_int($val)){
@@ -1615,7 +1737,7 @@ class Model
 				$bindings[$ix] = "'$val'";	
 		}
 
-		$sql = Arrays::str_replace_array('?', $bindings, $pre_compiled_sql);
+		$sql = Arrays::strReplace('?', $bindings, $pre_compiled_sql);
 		$sql = trim(preg_replace('!\s+!', ' ', $sql));
 
 		if ($this->semicolon_ending){
@@ -1630,19 +1752,22 @@ class Model
 	}
 
 	// Debug query
-	function dd(bool $sql_formater = false){
-		$this->sql_formatter_status = self::$sql_formatter_status ?? $sql_formater;
+	function dd(bool $sql_formatter = false){
+		$this->sql_formatter_status = self::$sql_formatter_status ?? $sql_formatter;
 
 		if ($this->last_operation == 'create'){
-			return $this->_dd($this->last_pre_compiled_query, $this->last_bindings);
+			return $this->last_compiled_sql;
 		}
 
 		return $this->_dd($this->toSql(), $this->getBindings());
 	}
 
-	// Debug last query
-	function getLog(bool $sql_formater = false){		
-		$this->sql_formatter_status = self::$sql_formatter_status ?? $sql_formater;
+	function getLog(bool $sql_formatter = false){		
+		$this->sql_formatter_status = self::$sql_formatter_status ?? $sql_formatter;
+
+		if ($this->last_operation == 'create'){
+			return $this->last_compiled_sql;
+		}
 
 		return $this->_dd($this->last_pre_compiled_query, $this->last_bindings);
 	}
@@ -1663,6 +1788,14 @@ class Model
 		
 		} else {
 			return $this->dd();
+		}
+	}
+
+	function logSQL(){
+		$config = Config::get();
+
+		if ($config['debug'] && $config['log_sql']){
+			log_sql($this->dd());
 		}
 	}
 
@@ -1749,10 +1882,10 @@ class Model
 		return $this->first($fields, $pristine);
 	}
 
-	function value($field){
+	function value($field, ?string $cast_to = null){
 		$this->onReading();
 
-		$q = $this->toSql([$field]);
+		$q  = $this->toSql([$field]);
 		$st = $this->bind($q);
 
 		$count = null;
@@ -1763,6 +1896,61 @@ class Model
 			$this->onRead($count);
 		} else
 			$ret = false;
+
+		/* 
+			Castear false daria muchos errores
+			ya que es el valor devuelto ante fallo
+		*/
+		if ($ret != false && !empty($cast_to)){
+			switch ($cast_to){
+				case 'string':
+					$ret = (string) $ret;
+					break;
+				case 'int':
+				case 'integer':
+					$ret = (int) $ret;
+					break;
+				case 'float':
+					$ret = (float) $ret;
+					break;
+				case 'double':
+					$ret = (double) $ret;
+					break;
+				case 'bool':
+					switch(gettype($ret)){
+						case 'string':
+							$_s = strtolower($ret);
+							
+							switch($_s){
+								case '1':
+								case 'on':
+									$ret = true;
+									break;
+								case '0':
+								case 'off':
+									$ret = false;
+									break;
+							}
+						break;
+
+						case 'int':
+							switch($ret){
+								case 1:
+									$ret = true;
+									break;
+								case 0:
+									$ret = false;
+									break;
+							}
+						break;
+					}
+					// sino cumple esas reglas estricas, el casting de bools no se efectua
+					
+					break;
+				default:
+					throw new \InvalidArgumentException("Invalid cast");
+			}
+		}
 			
 		return $ret;	
 	}
@@ -1950,7 +2138,6 @@ class Model
 		return $this->group($closure, 'OR', true);
 	}
 
-
 	function when($precondition = null, ?callable $closure = null, ?callable $closure2 = null){
 		if (!empty($precondition)){			
 			call_user_func($closure, $this);	
@@ -1961,7 +2148,201 @@ class Model
 		return $this;	
 	}
 
-	protected function _where(?Array $conditions = null, string $group_op = 'AND', $conjunction = null)
+	static protected function _where_array(Array $cond_ay, $parent_conj = 'AND')
+	{
+		$accepted_conj = [
+			'AND', 'OR', 'NOT', 'AND NOT', 'OR NOT'
+		];
+
+		$code = '';
+		foreach ($cond_ay as $key => $ay){
+			if (!is_array($ay)){
+				continue;
+			}
+
+			$ay_str = var_export($ay, true);
+
+			//dd($ay, "PARENT CONJ is $parent_conj");
+
+			if (is_string($key)){
+				if (!in_array($key, $accepted_conj)){
+					throw new \Exception("Conjuntion '$key' is invalid");
+				}
+
+				$conj = $key;
+
+				$is_simple = Arrays::areSimpleAllSubArrays($ay);
+				$is_multi  = is_array($ay) && Arrays::isMultidim($ay);
+
+				//dd($ay, "GRUPO con op $key " . ($is_simple ? ' -- simple' : ''));
+
+				if ($is_simple || !$is_multi){
+					$w_type = ($parent_conj == 'OR' ? 'whereOr' : 'where');
+				
+					// switch ($parent_conj){
+					// 	case 'OR':
+					// 		$w_type = 'whereOr';
+					// 		break;
+					// 	case 'AND':
+					// 		$w_type = 'where';
+					// 		break;
+
+					// 	case 'NOT':
+					// 		$w_type = 'andNot'; //
+					// 		break;
+					// 	case 'OR NOT':
+					// 		$w_type = 'orNot'; //
+					// 		break;
+					// 	case 'AND NOT':
+					// 		$w_type = 'andNot'; //
+					// 		break;
+				
+					// 	default:
+					// 		$w_type = 'where';
+					// 		break;
+					// }
+
+
+					$code .= "\$q->$w_type($ay_str);\n";
+				} else {
+					$code  .=  "\$q->group(function (\$q) {". static::_where_array($ay, $conj) ."});\n";
+				}
+				
+				
+			} else {
+				$is_simple = is_array($ay) && Arrays::areSimpleAllSubArrays($ay);
+				$is_multi  = is_array($ay) && Arrays::isMultidim($ay);
+
+				//dd($ay, "GRUPO - key $key" . ($is_simple ? ' -- simple' : ''));
+
+				if ($is_simple || !$is_multi){
+					
+					$w_type = ($parent_conj == 'OR' ? 'orWhere' : 'where');
+
+					// switch ($parent_conj){
+					// 	case 'OR':
+					// 		$w_type = 'orWhere';
+					// 		break;
+					// 	case 'AND':
+					// 		$w_type = 'where';
+					// 		break;
+
+					// 	case 'NOT':
+					// 		$w_type = 'andNot'; //
+					// 		break;
+					// 	case 'OR NOT':
+					// 		$w_type = 'orNot'; //
+					// 		break;
+					// 	case 'AND NOT':
+					// 		$w_type = 'andNot'; //
+					// 		break;
+				
+					// 	default:
+					// 		$w_type = 'where';
+					// 		break;
+					// }
+
+
+					$code  .= "\$q->$w_type(". $ay_str .");\n";
+				
+				} else {
+
+					// dd(
+					// 	$ay, "Multi?" . ((int) $is_multi) .  " Simple? " . ((int) $is_simple)
+					// );
+
+					if (!in_array($key, $accepted_conj)){
+						$conj = 'AND';
+					} else {
+						$conj = $key;
+					}
+
+					$code  .=  "\$q->group(function (\$q) {". static::_where_array($ay, $conj) ."});\n";
+				}
+
+			}
+		}	
+
+		return $code;
+	}
+
+	/*
+	Interpreta un array como el siguiente:
+
+      	[
+			'AND' => [
+				[
+					'OR' => [
+						'OR' => [
+							['cost', 100, '<='],
+							['description', NULL, 'IS NOT']
+						],
+
+						['name', '%Pablo', 'LIKE']
+					]
+				],
+
+				['stars', 5]
+			]    
+		]
+
+		Y debe poder interpretar lo siguiente:
+
+		[
+			'AND' => [
+				['name', '%a%', 'LIKE'],
+
+				[
+					'AND' => [                     // <----- podria ser hibrido funcionando igual si falta la conjuncion y asumiendo es 'AND'
+						['cost', 100, '>'],
+						['id', 50, '<']
+					]
+				],
+				
+				[
+					'OR' => [
+						['is_active', 1],
+						[
+							'AND' => [ 
+								['cost', 100, '<='],
+								['description', NULL, 'IS NOT']
+							]
+						]
+					]
+				],
+				
+				['belongs_to', 150, '>']		
+			]	
+		]
+
+		* Tambien deberia poder (a futuro) aceptar NOT, AND NOT y OR NOT
+
+		De momento devuelve el codigo que debe evaluarse con eval()
+
+		Ej:
+
+		$q = Model::where_array($ay);
+
+        $code = Strings::beforeLast("return table('products')$q", ';') . '->dd();';
+
+        dd($code);
+
+        DB::getConnection("az");
+        
+        dd(
+            eval($code)
+        );
+
+		Podria eventualmente armar solamente el where() y encolar los parametros para hacer luego el binding sin requerir eval.
+	*/
+	static function where_array(Array $cond_ay){
+		return ltrim(
+			static::_where_array($cond_ay),
+			'$q'
+		);
+	}
+
+	protected function _where(?array $conditions = null, string $group_op = 'AND', $conjunction = null)
 	{
 		//dd($group_op, 'group_op');
 		//dd($conjunction, 'conjuntion');
@@ -1970,8 +2351,8 @@ class Model
 			return;
 		}
 
-		if (Arrays::is_assoc($conditions)){
-			$conditions = Arrays::nonassoc($conditions);
+		if (Arrays::isAssocc($conditions)){
+			$conditions = Arrays::nonAssoc($conditions);
 		}
 
 		if (isset($conditions[0]) && is_string($conditions[0]))
@@ -1989,7 +2370,7 @@ class Model
 					$field = $this->getFullyQualifiedField($cond[0]);
 
 					if ($field == null)
-						throw new \Exception("Field can not be NULL");
+						throw new SqlException("Field can not be NULL");
 
 					if(is_array($cond[1]) && (empty($cond[2]) || in_array($cond[2], ['IN', 'NOT IN']) ))
 					{	
@@ -2057,7 +2438,7 @@ class Model
 			]);
 
 		if (!$validation){
-			throw new \InvalidArgumentException(json_encode(
+			throw new InvalidValidationException(json_encode(
 				$this->validator->getErrors()
 			));
 		}
@@ -2073,7 +2454,24 @@ class Model
 		return $this;
 	}
 
-	function where($conditions, $conjunction = 'AND'){
+	function where($conditions, $conjunction = 'AND')
+	{
+		// Si se hace where(1) lo convierte en WHERE 1=1
+		if ($conditions == 1){
+			$conditions = [1, 1];
+		}
+
+		/*
+			Laravel compatibility
+			
+			In "Laravel mode", $conditions es la key y $conjunction el valor
+		*/
+		if (is_string($conditions)){
+			$key              = $conditions;
+			$conditions       = [];
+			$conditions[$key] = $conjunction;
+		}
+
 		$this->_where($conditions, 'AND', $conjunction);
 		return $this;
 	}
@@ -2119,6 +2517,10 @@ class Model
 	}
 
 	function find($id){
+		if (empty($this->schema)){
+			return $this->where(['id' => $id]);
+		}		
+
 		return $this->where([$this->getFullyQualifiedField($this->schema['id_name']) => $id]);
 	}
 
@@ -2196,6 +2598,11 @@ class Model
 		return $this;
 	}
 
+	function whereLike(string $field, $val){
+		$this->where([$this->getFullyQualifiedField($field), $val, 'LIKE']);
+		return $this;
+	}
+
 	function oldest(){
 		$this->orderBy([$this->getFullyQualifiedField($this->createdAt) => 'ASC']);
 		return $this;
@@ -2213,8 +2620,8 @@ class Model
 	
 	function _having(array $conditions = null, $group_op = 'AND', $conjunction = null)
 	{	
-		if (Arrays::is_assoc($conditions)){
-            $conditions = Arrays::nonassoc($conditions);
+		if (Arrays::isAssocc($conditions)){
+            $conditions = Arrays::nonAssoc($conditions);
         }
 
 		if ((count($conditions) == 3 || count($conditions) == 2) && !is_array($conditions[1]))
@@ -2225,7 +2632,7 @@ class Model
 		$_having = [];
 		foreach ((array) $conditions as $cond)
 		{	
-			if (Arrays::is_assoc($cond)){
+			if (Arrays::isAssocc($cond)){
 				$cond[0] = Arrays::arrayKeyFirst($cond);
 				$cond[1] = $cond[$cond[0]];
 			}
@@ -2287,8 +2694,8 @@ class Model
 
 	function having(array $conditions, $conjunction = 'AND')
 	{	
-		if (Arrays::is_assoc($conditions)){
-            $conditions = Arrays::nonassoc($conditions);
+		if (Arrays::isAssocc($conditions)){
+            $conditions = Arrays::nonAssoc($conditions);
         }
 
 		if (!is_array($conditions[0])){
@@ -2347,38 +2754,19 @@ class Model
 	function update(array $data, $set_updated_at = true)
 	{
 		if ($this->conn == null)
-			throw new \Exception('No conection');
+			throw new SqlException('No conection');
 			
 		if (empty($data)){
-			throw new \Exception('There is no data to update');
+			throw new SqlException('There is no data to update');
 		}
 
-		if (!Arrays::is_assoc($data)){
-			throw new \Exception('Array of data should be associative');
+		if (!Arrays::isAssocc($data)){
+			throw new SqlException('Array of data should be associative');
 		}
 
-		$data = $this->applyInputMutator($data, 'UPDATE');
-		$vars   = array_keys($data);
-		$vals = array_values($data);
+		$this->ignoreFieldsNotPresentInSchema($data);
 
 
-		if(!empty($this->fillable) && is_array($this->fillable)){
-			foreach($vars as $var){
-				if (!in_array($var,$this->fillable))
-					throw new \Exception("Update: $var is not fillable");
-			}
-		}
-
-		// Validación
-		if (!empty($this->validator)){
-			$validado = $this->validator->validate($data, $this->getRules());
-			if ($validado !== true){
-				throw new \Exception(json_encode(
-					$this->validator->getErrors()
-				));
-			} 
-		}
-	
 		$this->data = $data;
 
 		switch ($this->current_operation){
@@ -2390,7 +2778,28 @@ class Model
 			default:
 				$this->onUpdating($data);
 		}		
-		
+
+		$data = $this->applyInputMutator($data, 'UPDATE');
+		$vars = array_keys($data);
+		$vals = array_values($data);
+
+		if(!empty($this->fillable) && is_array($this->fillable)){
+			foreach($vars as $var){
+				if (!in_array($var,$this->fillable))
+					throw new SqlException("Update: $var is not fillable");
+			}
+		}
+
+		// Validación
+		if (!empty($this->validator)){
+			$validado = $this->validator->validate($data, $this->getRules());
+			if ($validado !== true){
+				throw new InvalidValidationException(json_encode(
+					$this->validator->getErrors()
+				));
+			} 
+		}
+	
 		$set = '';
 		foreach($vars as $ix => $var){
 			$set .= " $var = ?, ";
@@ -2415,11 +2824,26 @@ class Model
 			$where = '';
 		}
 
+		if (trim($where) == ''){
+			throw new SqlException("WHERE can not be empty in UPDATE statement");
+		}
+
 		$q = "UPDATE ". DB::quote($this->from()) .
 				" SET $set WHERE " . $where;		
 
-		//d($q, 'Update statement');
+		// dd($q, 'Update statement');
 
+		/*
+			JSON no puede ser un string vacio ('')
+		*/
+		foreach($vals as $ix => $val){	
+			if (isset($this->schema['attr_type_detail'][$vars[$ix]]) && in_array($this->schema['attr_type_detail'][$vars[$ix]], ['JSON'])){
+				if ($vals[$ix] == ''){
+					$vals[$ix] = null;
+				} 
+			}
+		}
+		
 		$vals = array_merge($vals, $this->w_vals);
 		$vars = array_merge($vars, $this->w_vars);		
 
@@ -2452,9 +2876,9 @@ class Model
 		if ($this->semicolon_ending){
 			$q .= ';';
 		}
-	
-		// d($vals, 'vals');
-		// d($q, 'q');
+
+		// dd($vals, 'vals');
+		// dd($q, 'q');
 
 		$st = $this->conn->prepare($q);
 
@@ -2528,7 +2952,7 @@ class Model
 	function setSoftDelete(bool $status) {
 		if (!$this->inSchema([$this->deletedAt])){
 			if ($status){
-				throw new \Exception("There is no $this->deletedAt for table '".$this->from()."' in the attr_types");
+				throw new SqlException("There is no $this->deletedAt for table '".$this->from()."' in the attr_types");
 			}
 		} 
 		
@@ -2545,14 +2969,14 @@ class Model
 	function delete(bool $soft_delete = true, array $data = [])
 	{
 		if ($this->conn == null)
-			throw new \Exception('No conection');
+			throw new SqlException('No conection');
 
 		// Validación
 		if (!empty($this->validator)){
 			$validado = $this->validator->validate(array_combine($this->w_vars, $this->w_vals), $this->getRules());
 
 			if ($validado !== true){
-				throw new \Exception(json_encode(
+				throw new InvalidValidationException(json_encode(
 					$this->validator->getErrors()
 				));
 			} 
@@ -2715,6 +3139,22 @@ class Model
 	}
 
 	/*
+		Si un campo es enviado al Modelo pero realmente no existe en el schema
+		entonces se debe ignorar para evitar generar un error innecesario.
+	*/
+	protected function ignoreFieldsNotPresentInSchema(array &$data){
+		if (empty($this->schema)){
+			return;
+		}
+
+		foreach ($data as $key => $dato){
+			if (!in_array($key, $this->getFillables())){
+				unset($data[$key]);
+			}
+		}
+	}
+
+	/*
 		@return mixed false | integer 
 
 		Si la data es un array de arrays, intenta un INSERT MULTIPLE
@@ -2724,9 +3164,9 @@ class Model
 		$this->current_operation = 'create';
 
 		if ($this->conn == null)
-			throw new \Exception('No connection');
+			throw new SqlException('No connection');
 
-		if (!Arrays::is_assoc($data)){
+		if (!Arrays::isAssocc($data)){
 			foreach ($data as $dato){
 				if (is_array($dato)){					
 					$last_id = $this->create($dato, $ignore_duplicates);
@@ -2740,6 +3180,8 @@ class Model
 		if (isset($data[0]) && is_array($data[0])){
 			return $last_id ?? null;
 		}
+
+		$this->ignoreFieldsNotPresentInSchema($data);
 
 		$this->data = $data;	
 		
@@ -2760,26 +3202,48 @@ class Model
 			$vals = array_values($data);
 		}
 
+		// dd($this->fillable, 'FILLABLE');
+		// dd($this->not_fillable, 'NOT FILLABLE');
+
 		// Validación
-		if (!empty($this->validator)){
-			if(!empty($this->fillable) && is_array($this->fillable)){
-				foreach($vars as $var){
-					if (!in_array($var,$this->fillable))
-						throw new \InvalidArgumentException("`{$this->table_name}`.`$var` is no fillable");
-				}
-			}
-			
-			$validado = $this->validator->validate($data, $this->getRules());
+		if (!empty($this->validator))
+		{			
+			$validado = $this->validator->validate($data, $this->getRules(), $this->fillable, $this->not_fillable);
 			if ($validado !== true){
-				throw new \Exception(json_encode(
+				dd($this->validator->getErrors());
+
+				throw new InvalidValidationException(json_encode(
 					$this->validator->getErrors()
 				));
 			} 
 		}
-		
-		$symbols  = array_map(function(string $e){
+
+		$symbols  = array_map(function(?string $e = null){
+			if ($e === null){
+				$e = '';
+			}
+
 			return ':'.$e;
 		}, $vars);
+
+		$q_marks  = array_map(function(?string $e = null){
+			if ($e === null){
+				$e = '';
+			}
+			
+			return "'$e'";
+		}, $vals);
+
+		/*
+			BLOB, TEXT, GEOMETRY or JSON columns can't have a default value
+		*/
+		foreach($vals as $ix => $val){	
+			if (isset($this->schema['attr_type_detail'][$vars[$ix]]) && in_array($this->schema['attr_type_detail'][$vars[$ix]], ['JSON', 'TEXT', 'BLOB', 'GEOMETRY'])){
+				if ($vals[$ix] == ''){
+					$vals[$ix] = null;
+				} 
+			}
+		}
 
 		if (DB::driver() == DB::MYSQL || DB::isMariaDB()) {
 			$str_vars = implode(', ', array_map(function ($var) {
@@ -2789,18 +3253,18 @@ class Model
 			$str_vars = implode(', ',$vars);
 		}
 
-		$str_vals = implode(', ',$symbols);
+		$str_vals     = implode(', ',$symbols);
+
+		$str_qmarks   = implode(', ',$q_marks);
 
 		$this->insert_vars = $vars;
 
-		$q = "INSERT INTO " . DB::quote($this->from()) . " ($str_vars) VALUES ($str_vals)";
+		$q                       = "INSERT INTO " . DB::quote($this->from()) . " ($str_vars) VALUES ($str_vals)";
+		$this->last_compiled_sql = "INSERT INTO " . DB::quote($this->from()) . " ($str_vars) VALUES ($str_qmarks)";
 
 		if ($this->semicolon_ending){
 			$q .= ';';
 		}
-
-		// dd($q, 'Statement');
-		// dd($vals, 'vals');
 
 		$st = $this->conn->prepare($q);
 	
@@ -2837,23 +3301,24 @@ class Model
 		$this->last_operation = 'create';
 
 		if (!$this->exec){
+			$this->logSQL();
+
 			// Ejecuto igual el hook a fines de poder ver la query con dd()
 			$this->onCreated($data, null);
 			return NULL;
 		}	
 
-		if ($ignore_duplicates){
-			try {
-                $result = $st->execute();
-            } catch (\PDOException $e){
-                if (!Strings::contains('SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry', $e->getMessage())){
-					throw new \PDOException(config()['debug'] ? $e->getMessage() : "Integrity constraint violation");
-                } 
-            }
-		} else {
-			$result = $st->execute();
-		}
 
+		try {
+			$result = $st->execute();
+		} catch (\PDOException $e){
+			$this->logSQL();
+			
+			if (!$ignore_duplicates && !Strings::contains('SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry', $e->getMessage())){
+				throw new \PDOException(Config::get()['debug'] ? $e->getMessage() : "Integrity constraint violation");
+			} 
+		}
+	
 		$this->current_operation = null;
 	
 		if (!isset($result)){
@@ -2888,7 +3353,7 @@ class Model
 	}
 
 	function insert(array $data, bool $ignore_duplicates = false){
-		if (!Arrays::is_assoc($data)){
+		if (!Arrays::isAssocc($data)){
 			if (is_array($data[0]))
 			{	
 				DB::beginTransaction();
@@ -2905,8 +3370,8 @@ class Model
 					
 					DB::rollback();
 
-					if (config()['debug']){
-						$msg = "Error inserting data from ". $this->from() . ' - ' .$e->getMessage() . '- SQL: '. $this->getLog() . " - values : [$val_str]";
+					if (Config::get()['debug']){
+						$msg = "Error inserting data from ". $this->from() . ' - ' .$e->getMessage() . '- SQL: '. $this->getLog();
 					} else {
 						$msg = 'Error inserting data';
 					}
@@ -2929,7 +3394,7 @@ class Model
 			} catch (\Exception $e){
 				DB::rollback();
 
-				if (config()['debug']){
+				if (Config::get()['debug']){
 					$msg = "Error inserting data from ". $this->from() . ' - ' .$e->getMessage() . '- SQL: '. $this->getLog();
 				} else {
 					$msg = 'Error inserting data';
@@ -2943,6 +3408,181 @@ class Model
 	function insertOrIgnore(array $data){
 		$this->insert($data, true);
 	}
+
+	/*
+		Insert múltiple en un solo STATEMENT - Por corregir ***
+		
+		Quizas pueda re-hacerse teniendo como premisa la sintaxis:
+
+        INSERT INTO tbl_name VALUES (1,2,3), (4,5,6), (7,8,9)
+
+		En cualquier caso los comodines deberian estar siempre en las mismas posiciones:
+
+		Ej:
+
+        INSERT INTO tbl_name VALUES (1,?,?), (4,?,?), (7,?,?)
+
+	*/
+	// function insertMultiple(array $data_arr, bool $hooks = true, bool $mutators = true)
+	// {
+	// 	if ($this->conn == null)
+	// 		throw new SqlException('No connection');
+
+	// 	$vals = [];		
+	// 	$vars = array_keys($data_arr[0]);
+
+	// 	$has_created_at =  $this->inSchema([$this->createdAt]) && !isset($vars[$this->createdAt]);
+	// 	if ($has_created_at){
+	// 		$at = datetime();
+	// 	}
+		
+	// 	foreach ($data_arr as $ix => $data){
+	// 		$this->data = $data;	
+			
+	// 		$data_arr[$ix] = $mutators ? $this->applyInputMutator($data, 'CREATE') : $data;
+			
+	// 		if (empty($vars)){
+	// 			$vars = array_keys($data);
+	// 		} else {
+	// 			$vars = array_unique(array_merge($vars, array_keys($data)));
+	// 		}
+
+	// 		$vals[$ix] = array_values($data_arr[$ix]);
+
+	// 		// Validación
+	// 		if (!empty($this->validator)){
+	// 			if(!empty($this->fillable) && is_array($this->fillable)){
+	// 				foreach($vars as $var){
+	// 					if (!in_array($var,$this->fillable))
+	// 						throw new \InvalidArgumentException("`{$this->table_name}`.`$var` is no fillable");
+	// 				}
+	// 			}
+
+	// 			$validado = $this->validator->validate($data, $this->getRules());
+	// 			if ($validado !== true){
+	// 				throw new InvalidValidationException(json_encode(
+					// 	$this->validator->getErrors()
+					// ));
+	// 			} 
+	// 		}
+
+	// 		// Event hook
+	// 		if ($hooks){
+	// 			$this->onCreating($data);
+
+	// 			// Hook onCreating() can change $data
+	// 			$vars = array_keys($data);
+	// 			$vals = array_values($data);
+	// 		}
+
+	// 		if ($has_created_at){
+	// 			$vals[$ix][] = $at;
+	// 		}
+	// 	}		
+	
+	// 	if ($has_created_at){
+	// 		$vars[] = $this->createdAt;
+	// 	}
+
+	// 	$cnt = count($data_arr);
+	// 	for ($i=0; $i<$cnt; $i++){
+	// 		$sr = [];
+	// 		foreach ($vars as $ix => $var){
+	// 			$key = ":{$var}_{$i}_k_{$ix}";
+	// 			$symbols[] = $key;
+	// 			$sr[] = $key;
+	// 		}
+	// 		$str_vals[] = '('. implode(', ',$sr) . ')';
+	// 	}
+
+	// 	if (!isset($str_vars)){
+	// 		$str_vars = implode(',', $vars);
+	// 	}
+
+	// 	/*
+	// 		INSERT INTO `product_tags` (`id_tag`, `name`, `comment`, `product_id`) 
+			
+	// 		VALUES 
+	// 		(NULL, 'N99', 'C99', '137'), 
+	// 		(NULL, 'N100', 'C100', '138')
+	// 	*/	
+
+	// 	$q = "INSERT INTO " . $this->from() . " ($str_vars) VALUES ". implode(',', $str_vals);
+	// 	$st = $this->conn->prepare($q);
+		
+	// 	for ($i=0; $i<$cnt; $i++){
+	// 		$cnt_vals = count($vals[$i]);
+	// 		for ($ix=0; $ix<$cnt_vals; $ix++){	
+	// 			$val = $vals[$i][$ix];	
+
+	// 			if(is_null($val)){
+	// 				$type = \PDO::PARAM_NULL;
+	// 			}elseif(isset($vars[$ix]) && $this->schema != NULL && isset($this->schema['attr_types'][$vars[$ix]])){
+	// 				$const = $this->schema['attr_types'][$vars[$ix]];
+	// 				$type = constant("PDO::PARAM_{$const}");
+	// 			}elseif(is_int($val))
+	// 				$type = \PDO::PARAM_INT;
+	// 			elseif(is_bool($val))
+	// 				$type = \PDO::PARAM_BOOL;
+	// 			elseif(is_string($val))
+	// 				$type = \PDO::PARAM_STR;	
+
+	// 			$param = ":{$vars[$ix]}_{$i}_k_{$ix}";
+	// 			$variable =  $val;
+			
+	// 			dd([$param,  $variable, $type]);
+	// 			$st->bindParam($param, $variable, $type);
+	// 		}
+	// 	}
+
+	// 	//dd($q);
+
+	// 	$this->last_bindings = $vals;
+	// 	$this->last_pre_compiled_query = $q;
+	// 	$this->last_operation = 'create';
+
+	// 	if (!$this->exec){
+	// 		// Ejecuto igual el hook a fines de poder ver la query con dd()
+
+	// 		if ($hooks){
+	// 			$this->onCreated($data, null);
+	// 		}
+			
+	// 		return NULL;
+	// 	}	
+
+	// 	$result = $st->execute();
+		
+	// 	if (!isset($result)){
+	// 		return;
+	// 	}
+
+	// 	/*
+	// 		If you insert multiple rows using a single INSERT statement, LAST_INSERT_ID() returns the value generated 
+	// 		for the first inserted row only. 
+	// 		The reason for this is to make it possible to reproduce easily the same INSERT statement against some other server.
+	// 	*/
+
+	// 	if ($result){
+	// 		// sin schema no hay forma de saber la PRI Key. Intento con 'id' 
+	// 		$id_name = ($this->schema != NULL) ? $this->schema['id_name'] : 'id';		
+
+	// 		if (isset($data[$id_name])){
+	// 			$this->last_inserted_id =	$data[$id_name];
+	// 		} else {
+	// 			$this->last_inserted_id = $this->conn->lastInsertId();
+	// 		}
+
+	// 		if ($hooks){
+	// 			$this->onCreated($data, $this->last_inserted_id);
+	// 		}
+	// 	}else {
+	// 		$this->last_inserted_id = false;	
+	// 	}
+
+	// 	return $this->last_inserted_id;		
+	// }
+		
 
 	function getInsertVals(){
 		return $this->insert_vars;
@@ -3087,7 +3727,7 @@ class Model
 	}
 
 	function isFillable(string $field){
-		return in_array($field, $this->fillable);
+		return in_array($field, $this->fillable) && !in_array($field, $this->not_fillable);
 	}
 
 	function getFillables(){
@@ -3118,12 +3758,20 @@ class Model
 		return array_diff($this->attributes, $this->schema['nullable']);
 	}
 
+	function getUniques(){
+		return $this->schema['uniques'];
+	}
+
 	function getRules(){
 		return $this->schema['rules'] ?? NULL;
 	}
 
 	function getRule(string $name){
 		return $this->schema['rules'][$name] ?? NULL;
+	}
+
+	function getFieldOrder(){
+		return $this->field_order;
 	}
 
 	/**
@@ -3146,4 +3794,107 @@ class Model
 	function getConn(){
 		return $this->conn;
 	}
+
+	/*	
+		Adds prefix to raw statements / queries
+
+		it's a partial implementation
+	*/
+	static function addPrefix(string $st, $tb_prefix = null)
+	{
+		$tb_prefix = $tb_prefix ?? DB::getTablePrefix() ?? null;
+
+		if (empty($tb_prefix)){
+			return $st;
+		}
+
+		// Para evitar agregarlo dos veces
+		if (Strings::contains($tb_prefix, $st)){
+			return $st;
+		}
+
+		$tb        = Strings::match($st, "/REFERENCES[ ]+`?([^\b^`^ ]+)`?/i");
+		$tb_quoted = preg_quote($tb, '/');
+
+		if (!empty($tb)){
+			$st = preg_replace("/REFERENCES[ ]+`$tb_quoted`/i", "REFERENCES `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/REFERENCES[ ]+$tb_quoted/i", "REFERENCES $tb_prefix{$tb}", $st);
+		}
+
+		$tb = Strings::match($st, "/CREATE[ ]+TABLE(?: IF NOT EXISTS)?[ ]+`?([^\b^`^ ]+)`?/i");
+
+		if (!empty($tb)){
+			$st = preg_replace("/CREATE TABLE IF NOT EXISTS?[ ]+`$tb`/i", "CREATE TABLE IF NOT EXISTS `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/CREATE TABLE[ ]+`$tb`/i", "CREATE TABLE `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/CREATE TABLE IF NOT EXISTS?[ ]+$tb/i", "CREATE TABLE IF NOT EXISTS $tb_prefix{$tb}", $st);
+			$st = preg_replace("/CREATE TABLE[ ]+$tb/i", "CREATE TABLE $tb_prefix{$tb}", $st);
+
+			return $st;
+		}
+
+		$tb = Strings::match($st, "/UPDATE[ ]+`?([^\b^`^ ]+)`?/i");
+
+		if (!empty($tb)){
+			$st = preg_replace("/UPDATE[ ]+`$tb`/i", "UPDATE `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/UPDATE[ ]+$tb/i", "UPDATE $tb_prefix{$tb}", $st);
+
+			return $st;
+		}
+
+		$tb = Strings::match($st, "/DELETE[ ]+FROM[ ]+`?([^\b^`^ ]+)`?/i");
+
+		if (!empty($tb)){
+			$st = preg_replace("/DELETE[ ]+FROM[ ]+`$tb`/i", "DELETE FROM `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/DELETE[ ]+FROM[ ]+$tb/i", "DELETE FROM $tb_prefix{$tb}", $st);
+
+			return $st;
+		}
+
+		$tb = Strings::match($st, "/ALTER[ ]+TABLE[ ]+`?([^\b^`^ ]+)`?/i");
+
+		if (!empty($tb)){
+			$st = preg_replace("/ALTER[ ]+TABLE[ ]+`$tb`/i", "ALTER TABLE `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/ALTER[ ]+TABLE[ ]+$tb/i", "ALTER TABLE $tb_prefix{$tb}", $st);
+
+			return $st;
+		}
+
+		$tb = Strings::match($st, "/INSERT[ ]+INTO[ ]+`?([^\b^`^ ]+)`?/i");
+
+		if (!empty($tb)){
+			$st = preg_replace("/INSERT[ ]+INTO[ ]+`$tb`/i", "INSERT INTO `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/INSERT[ ]+INTO[ ]+$tb/i", "INSERT INTO $tb_prefix{$tb}", $st);
+
+			return $st;
+		}
+
+		if (Strings::match($st, "/(SELECT)[ ]/i")){
+			$tb = Strings::match($st, "/FROM[ ]+`?([^\b^`^ ]+)`?/i");
+
+			if (!Strings::startsWith('information_schema.tables', $tb) && !empty($tb)){
+				$st = preg_replace("/FROM[ ]+`$tb`/i", "FROM `$tb_prefix{$tb}`", $st);
+				$st = preg_replace("/FROM[ ]+$tb/i", "FROM $tb_prefix{$tb}", $st);
+			}
+		}
+
+		/*
+			JOIN es complejo porque el ON puede incluir nombres de tablas 
+			o de alias y en este ultimo caso no tendria sentido agregar prefijo
+
+			SELECT Orders.OrderID, Customers.CustomerName
+			FROM Orders
+			INNER JOIN Customers ON Orders.CustomerID = Customers.CustomerID;
+		*/
+		$tb = Strings::match($st, "/JOIN[ ]+`?([^\b^`^ ]+)`?/i");
+
+		if (!empty($tb)){
+			$st = preg_replace("/JOIN[ ]+`$tb`/i", "JOIN `$tb_prefix{$tb}`", $st);
+			$st = preg_replace("/JOIN[ ]+$tb/i", "JOIN $tb_prefix{$tb}", $st);
+
+			// Aca podria ver de agregar prefijo en la parte del "ON" en JOINs
+		}
+
+		return $st;		
+	}
+
 }

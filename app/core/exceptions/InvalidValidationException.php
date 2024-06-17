@@ -1,6 +1,6 @@
 <?php
 
-namespace boctulus\SW\exceptions;
+namespace boctulus\SW\core\exceptions;
 
 class InvalidValidationException extends \InvalidArgumentException {
 

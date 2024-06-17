@@ -3,22 +3,23 @@
 namespace boctulus\SW\core;
 
 use boctulus\SW\core\libs\Url;
+use boctulus\SW\core\Constants;
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Request;
 use boctulus\SW\core\libs\Strings;
 use boctulus\SW\core\libs\Response;
-
 
 class FrontController
 {
     const DEFAULT_ACTION = "index";
 
     static function resolve()
-    {
+    {   
         global $argv;
 
-        $config = config();
+        $cfg = Config::get();
 
-        $res    = Response::getInstance();
+        $res = Response::getInstance();
 
         if (php_sapi_name() != 'cli') {
             $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -72,11 +73,10 @@ class FrontController
             return;
         }
 
-
-        $namespace = 'boctulus\\SW\\controllers\\';
+        $namespace = $cfg['namespace'] . '\\controllers\\';
 
         if (empty($_params) || $_params[0] == '') {
-            $class_file = substr($config['default_controller'], 0, strlen($config['default_controller']) - 10);
+            $class_file = substr($cfg['default_controller'], 0, strlen($cfg['default_controller']) - 10);
             $class_name = Strings::snakeToCamel($class_file);
             $class_name = "{$namespace}{$class_name}Controller";
             $method = self::DEFAULT_ACTION;
@@ -87,7 +87,7 @@ class FrontController
             $folder = '';
             $controller = $_params[$ix];
 
-            $class_file =  CONTROLLERS_PATH . Strings::snakeToCamel($controller) . 'Controller.php';
+            $class_file =  Constants::CONTROLLERS_PATH . Strings::snakeToCamel($controller) . 'Controller.php';
             $cnt  = count($_params) - 1;
             while (!file_exists($class_file) && ($ix < $cnt)) {
                 $ix++;
@@ -99,7 +99,7 @@ class FrontController
                 }
 
                 $controller = $_params[$ix];
-                $class_file =  CONTROLLERS_PATH . $folder . Strings::snakeToCamel($controller) . 'Controller.php';;
+                $class_file =  Constants::CONTROLLERS_PATH . $folder . Strings::snakeToCamel($controller) . 'Controller.php';;
             }
 
             // dd($class_file, "Probando ...");
@@ -117,6 +117,10 @@ class FrontController
             // dd($method, 'METHOD:');
         }
 
+
+        // dd($class_name, 'CLASS_NAME:');
+        // dd($method, 'METHOD:');
+
         if (is_numeric($class_name) || is_numeric($method)){
             return;
         }
@@ -127,6 +131,7 @@ class FrontController
         $class_name = str_replace('/', "\\", $class_name);
 
         if (!class_exists($class_name)) {
+            // dd("NO existe clase $class_name");
             return; // *
         }
 
@@ -143,13 +148,14 @@ class FrontController
             }
         }
 
-        $controller_obj = new $class_name();
+        $controller_obj = new $class_name();        
 
         if (isset($dont_exec)) {
             exit;
         }
 
         $data = call_user_func_array([$controller_obj, $method], $params);
+
 
         // Devolver algo desde un controlador sería equivalente a enviarlo como respuesta
         if (!empty($data)) {

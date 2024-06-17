@@ -1,5 +1,5 @@
 <?php
 
-namespace boctulus\SW\exceptions;
+namespace boctulus\SW\core\exceptions;
 
 class TableAlreadyExistsException extends \Exception {}

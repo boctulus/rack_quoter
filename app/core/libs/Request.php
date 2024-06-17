@@ -11,6 +11,8 @@ class Request
     static protected $query_arr;
     static protected $raw;
     static protected $body;
+    static protected $body_as_obj;
+    static protected $body_param_destroyed = [];
     static protected $params;
     static protected $headers;
     static protected $accept_encoding;
@@ -26,7 +28,7 @@ class Request
     }
 
     static function getInstance(){
-        if(static::$instance == NULL){
+        if(static::$instance == null){
             if (php_sapi_name() != 'cli'){
                 if (isset($_SERVER['QUERY_STRING'])){
 					static::$query_arr = Url::query();
@@ -37,8 +39,6 @@ class Request
                     }
 				}
                 
-                static::$raw     = file_get_contents("php://input");
-                static::$body    = json_decode(static::$raw, true);
                 static::$headers = apache_request_headers();
 
                 $tmp = [];
@@ -55,7 +55,65 @@ class Request
     }
 
     function getRaw(){
+        if (static::$raw === null){
+            static::$raw = file_get_contents("php://input");
+        }
+
         return static::$raw;
+    }
+
+    function getBody($as_obj = false)
+    {
+        if ($as_obj && static::$body_as_obj === null){
+            static::$body_as_obj = json_decode($this->getRaw(), false);            
+        } else {
+            if (!$as_obj && static::$body === null){
+                static::$body = json_decode($this->getRaw(), true);            
+            }
+        }
+
+        return $as_obj ? static::$body_as_obj : static::$body;
+    }
+
+    function getBodyParam($key){
+        if (static::$body === null){
+            if (static::$body_as_obj === null){
+                $this->getBody(false);
+
+                $val = static::$body[$key] ?? null;
+            } else {
+                $val = static::$body->$key ?? null;
+            }           
+        } else {
+            $val = static::$body[$key] ?? null;
+        }
+
+        if ($val == null){
+            return null;
+        }
+
+        if (in_array($key, static::$body_param_destroyed)){
+            return null;
+        }
+
+        return $val;
+    }
+
+    // getter destructivo sobre el body --> deberia usar un array para guardar keys destruidas
+    function shiftBodyParam($key){
+        $val = $this->getBodyParam($key);
+
+        if ($val == null){
+            return null;
+        }
+
+        if (!in_array($key, static::$body_param_destroyed)){
+            static::$body_param_destroyed[] = $key;
+        } else {
+            return null;
+        }
+
+        return $val;
     }
 
     function getFormData(){
@@ -109,7 +167,7 @@ class Request
     }
 
     function header(string $key){
-        return static::$headers[strtolower($key)] ?? NULL;
+        return static::$headers[strtolower($key)] ?? null;
     }
 
     // alias
@@ -127,32 +185,32 @@ class Request
     }
 
     function getAuth(){
-        return static::$headers['authorization'] ?? NULL;
+        return static::$headers['authorization'] ?? null;
     }
 
     function hasAuth(){
-        return $this->getAuth() != NULL; 
+        return $this->getAuth() != null; 
     }
 
     function getApiKey(){
         return  static::$headers['x-api-key'] ?? 
                 $this->shiftQuery('api_key') ??                
-                NULL;
+                null;
     }
 
     function hasApiKey(){
-        return $this->getApiKey() != NULL; 
+        return $this->getApiKey() != null; 
     }
 
     function getTenantId(){
         return  
             $this->shiftQuery('tenantid') ??
             static::$headers['x-tenant-id'] ??             
-            NULL;
+            null;
     }
 
     function hasTenantId(){
-        return $this->getTenantId() !== NULL; 
+        return $this->getTenantId() !== null; 
     }
 
     function authMethod(){
@@ -191,7 +249,7 @@ class Request
     }    
 
     // getter destructivo sobre $query_arr
-    function shiftQuery($key, $default_value = NULL)
+    function shiftQuery($key, $default_value = null)
     {
         static $arr = [];
 
@@ -217,31 +275,6 @@ class Request
     function getParams(){
         return static::$params;
     } 
-
-    function getBody(?bool $as_obj = null)
-    {
-        if ($as_obj === null){
-            $as_obj = $this->as_object;
-        }
-
-        return $as_obj ? (object) static::$body : static::$body;
-    }
-
-    function getBodyParam($key){
-        return static::$body[$key] ?? NULL;
-    }
-
-    // getter destructivo sobre el body
-    function shiftBodyParam($key){
-        if (!isset(static::$body[$key])){
-            return NULL;
-        }
-
-        $ret = static::$body[$key];
-
-        unset(static::$body[$key]);
-        return $ret;
-    }
 
     function getCode(){
         return http_response_code();

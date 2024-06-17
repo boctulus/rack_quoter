@@ -3,18 +3,20 @@
 namespace boctulus\SW\core\libs;
 
 use boctulus\SW\models\MyModel;
+use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Schema;
 use boctulus\SW\core\libs\Strings;
+use boctulus\SW\core\exceptions\SqlException;
 
 class DB 
 {
 	protected static $connections = [];
-	protected static $current_id_conn;
+	protected static $current_id_conn;	
 	protected static $model_instance;  
 	protected static $raw_sql;
 	protected static $values = [];
 	protected static $tb_name;
-	protected static $inited_transaction   = false; 
+	protected static $inited_transaction = false; 
 	protected static $default_primary_key_name = 'id';
 
 	const INFOMIX    = 'infomix';
@@ -26,6 +28,16 @@ class DB
 	const ORACLE     = 'oracle';
 	const SYBASE     = 'sybase';
 	const FIREBIRD   = 'firebird';
+	
+	static function getTablePrefix(){
+		$curr_conn_id = static::$current_id_conn;
+
+		if (static::$current_id_conn == null){
+			$curr_conn_id = DB::getDefaultConnectionId();
+		}
+
+		return Config::get("db_connections.{$curr_conn_id}.tb_prefix");
+	}
 
 	// Util para establecer la PRIMARY KEY por defecto en caso de que no haya scheme definido
 	public static function setPrimaryKeyName(string $name){
@@ -38,7 +50,7 @@ class DB
 			throw new \InvalidArgumentException("Connection identifier can not be NULL");
 		}
 
-		if (!isset(config()['db_connections'][$id])){
+		if (!isset(Config::get()['db_connections'][$id])){
 			throw new \InvalidArgumentException("Unregistered connection identifier for '$id'");
 		}
 
@@ -46,7 +58,7 @@ class DB
 	}
 
     public static function getConnection(string $conn_id = null) {	
-		$config = config();
+		$config = Config::get();
 
 		$cc = count($config['db_connections']);
 		
@@ -61,7 +73,7 @@ class DB
 				if ($cc == 1){
 					static::$current_id_conn = array_keys($config['db_connections'])[0];
 				} elseif (!empty($config['db_connection_default'])) {
-					static::$current_id_conn = config()['db_connection_default'];
+					static::$current_id_conn = Config::get()['db_connection_default'];
 				} else {	
 					throw new \InvalidArgumentException('No database selected');
 				}	
@@ -98,15 +110,15 @@ class DB
 		*/
 
 		if ($driver == 'mariadb'){
-			$driver = DB::MYSQL;
+			$driver = static::MYSQL;
 		}
 
 		if ($driver == 'postgres'){
-			$driver = DB::PGSQL;
+			$driver = static::PGSQL;
 		}
 
 		if ($driver == 'sqlsrv' || $driver == 'mssql'){
-			$driver = DB::SQLSRV;
+			$driver = static::SQLSRV;
 		}
 
 		// faltaría dar soporte a ODBC
@@ -114,15 +126,15 @@ class DB
 
 		try {
 			switch ($driver) {
-				case DB::MYSQL:
+				case static::MYSQL:
 					self::$connections[static::$current_id_conn] = new \PDO(
 						"$driver:host=$host;dbname=$db_name;port=$port",  /* DSN */
 						$user, 
 						$pass, 
 						$pdo_opt);				
 					break;
-				case DB::SQLITE:
-					$db_file = Strings::contains(DIRECTORY_SEPARATOR, $db_name) ?  $db_name : __DIR__ . '/../etc/' . $db_name;
+				case static::SQLITE:
+					$db_file = Strings::contains(DIRECTORY_SEPARATOR, $db_name) ?  $db_name : STORAGE_PATH . $db_name;
 	
 					self::$connections[static::$current_id_conn] = new \PDO(
 						"sqlite:$db_file", /* DSN */
@@ -131,7 +143,7 @@ class DB
 						$pdo_opt);
 					break;
 
-				case DB::PGSQL:
+				case static::PGSQL:
 					self::$connections[static::$current_id_conn] = new \PDO(
 						"pgsql:host=$host;dbname=$db_name;port=$port", /* DSN */
 						$user, 
@@ -139,7 +151,7 @@ class DB
 						$pdo_opt);
 					break;	
 				
-				case DB::SQLSRV:
+				case static::SQLSRV:
 					self::$connections[static::$current_id_conn] = new \PDO(
 						"sqlsrv:Server=$host,$port;Database=$db_name", /* DSN */
 						$user, 
@@ -154,17 +166,17 @@ class DB
 			$conn = &self::$connections[static::$current_id_conn];
 
 			if ($charset != null){
-				switch (DB::driver()){
-					case DB::MYSQL:
-					case DB::PGSQL:
+				switch (static::driver()){
+					case static::MYSQL:
+					case static::PGSQL:
 						$charset = str_replace('-', '', $charset);
 						$cmd = "SET NAMES '$charset'";
 						break;
-					case DB::SQLITE:
+					case static::SQLITE:
 						$charset = preg_replace('/UTF([0-9]{1,2})/i', "UTF-$1", $charset);
 						$cmd = "PRAGMA encoding = '$charset'";
 						break;
-					case DB::SQLSRV:
+					case static::SQLSRV:
 						// it could be unnecesary
 						// https://docs.microsoft.com/en-us/sql/connect/php/constants-microsoft-drivers-for-php-for-sql-server?view=sql-server-ver15
 						if ($charset == 'UTF8' || $charset == 'UTF-8'){
@@ -181,7 +193,7 @@ class DB
 		} catch (\PDOException $e) {
 			$msg = 'PDO Exception: '. $e->getMessage();
 
-			if (config()['debug']){
+			if (Config::get()['debug']){
 				$conn_arr = $config['db_connections'][static::$current_id_conn];
 				$msg .= ". Connection = ". var_export($conn_arr, true);
 			}
@@ -195,11 +207,11 @@ class DB
 	}
 
 	static function getDefaultConnectionId(){
-		return config()['db_connection_default'];
+		return Config::get()['db_connection_default'];
 	}
 	
 	static function getDefaultConnection(){
-		return self::getConnection(config()['db_connection_default']);
+		return self::getConnection(Config::get()['db_connection_default']);
 	}
 
 	public static function isDefaultConnection(){
@@ -229,7 +241,7 @@ class DB
 	}
 
 	static function getConnectionConfig(){
-		return config()['db_connections'];
+		return Config::get()['db_connections'];
 	}
 
 	static function closeAllConnections(){
@@ -247,7 +259,7 @@ class DB
 
 	
 	public static function getAllConnectionIds(){
-		return array_keys(config()['db_connections']);
+		return array_keys(Config::get()['db_connections']);
 	}
 
 	// alias
@@ -257,7 +269,7 @@ class DB
 
 	public static function getCurrentConnectionId(bool $auto_connect = false){
 		if ($auto_connect && !static::$current_id_conn){
-			DB::getConnection();
+			static::getConnection();
 		}
 
 		return static::$current_id_conn;
@@ -268,7 +280,7 @@ class DB
 			return null;
 		}
 
-		return config()['db_connections'][static::$current_id_conn];
+		return Config::get()['db_connections'][static::$current_id_conn];
 	}
 
 	public static function database(){
@@ -297,31 +309,58 @@ class DB
 			static::getConnection($db_conn_id);
 		}
 
-		switch (DB::driver()){
-			case DB::MYSQL:
+		switch (static::driver()){
+			case static::MYSQL:
 				$db_name = static::getCurrentDB();
 
 				$sql = "SELECT table_name FROM information_schema.tables
 				WHERE table_schema = '$db_name';";
 				
 				return array_column(static::select($sql), 'TABLE_NAME');
-			// case DB::PGSQL:
+			// case static::PGSQL:
 			// 	break;
-			// case DB::SQLSRV:
+			// case static::SQLSRV:
 			// 	break;
-			// case DB::SQLITE:
+			// case static::SQLITE:
 			// 	break;
-			// case DB::INFOMIX:
+			// case static::INFOMIX:
 			// 	break;
-			// case DB::ORACLE:
+			// case static::ORACLE:
 			// 	break;
-			// case DB::DB2:
+			// case static::DB2:
 			// 	break;
-			// case DB::SYBASE:
+			// case static::SYBASE:
 			// 	break;
 			default:
-				throw new \Exception("Method " . __METHOD__ . " not supported for ". DB::driver());
+				throw new \Exception("Method " . __METHOD__ . " not supported for ". static::driver());
 		}
+	}
+
+
+	/*
+		Returns a tenant for each individual or cluster of databases
+
+		It's possible to override tentant representants giving $db_representants array
+	*/
+	public static function getAllTenantRepresentants(Array $db_representants = []){
+		$grouped = static::getDatabasesGroupedByTenantGroup(true);
+		
+		$db_conn_ids = [];
+		foreach ($grouped as $group_name => $db_name){
+			// elijo la conexión a una DB cualquiera de cada grupo como representativa
+			// o la que me especifiquen
+			$db_conn_id = $db_name[0];
+	
+			if (isset($db_representants) && !empty($db_representants)){
+				if (isset($db_representants[$group_name])){
+					$db_conn_id = $db_representants[$group_name];
+				}
+			} 
+	
+			$db_conn_ids[] = $db_conn_id;
+		}
+
+		return $db_conn_ids;
 	}
 
 	public static function driver(){
@@ -375,15 +414,19 @@ class DB
 	}
 	
 	static function getTenantGroupNames() : Array {
-		if (!isset(config()['tentant_groups'])){
+		if (!isset(Config::get()['tentant_groups'])){
 			throw new \Exception("File config.php is outdated. Lacks 'tentant_groups' section");
 		}
 
-		return array_keys(config()['tentant_groups']);
+		return array_keys(Config::get()['tentant_groups']);
 	}
 
-	static function getTenantGroupName(string $tenant_id) : ?string {
+	static function getTenantGroupName(?string $tenant_id = null) : ?string {
 		static $gns;
+
+		if ($tenant_id === null){
+			return get_default_connection_id();
+		}
 
 		if (is_null($gns)){
 			$gns = [];
@@ -393,11 +436,11 @@ class DB
 			return $gns[$tenant_id];
 		}
 
-		if (!isset(config()['tentant_groups'])){
+		if (!isset(Config::get()['tentant_groups'])){
 			throw new \Exception("File config.php is outdated. Lacks 'tentant_groups' section");
 		}
 
-        foreach (config()['tentant_groups'] as $group_name => $tg){
+        foreach (Config::get()['tentant_groups'] as $group_name => $tg){
             foreach ($tg as $conn_pattern){
                 if (preg_match("/$conn_pattern/", $tenant_id)){
                     $gns[$tenant_id] = $group_name;
@@ -410,6 +453,63 @@ class DB
 
         return $gns[$tenant_id];
     }
+
+	/*
+		@return databas connections grouped by tenanant group name
+	*/
+	static function getGroupedDatabases(bool $include_main_database = false){
+        $grouped_dbs = [];
+
+        $dbs = Schema::getDatabases();
+
+        foreach ($dbs as $db){
+            $group = static::getTenantGroupName($db);
+            
+            if (!$group){
+                continue;
+            }
+
+            if (!isset($grouped_dbs[$group])){
+                $grouped_dbs[$group] = [];
+            }
+
+            $grouped_dbs[$group][] = $db;
+        }
+
+		if ($include_main_database){
+			$def_con = get_default_connection_id();
+        	$grouped_dbs[$def_con] = [ $def_con ];
+		}
+
+        return $grouped_dbs;
+    }
+
+	static function getDatabasesGroupedByTenantGroup(bool $include_main_database = false){
+		return static::getGroupedDatabases($include_main_database);
+	}
+
+	/*
+		Lista conexiones de bases de datos registradas que *no* forman parte de ningún tenant group
+	*/
+	static function getUngroupedDatabases(bool $exclude_default_conn = true){
+		$db_conns = static::getAllConnectionIds();
+        $grouped  = static::getGroupedDatabases();
+        
+		$grouped_flat = [];
+        foreach ($grouped as $g_name => $gc){
+			foreach ($gc as $c){
+				$grouped_flat[] = $c;
+			}
+        }
+
+		$ungrouped = array_diff($db_conns, $grouped_flat);
+
+		if ($exclude_default_conn){
+			$ungrouped = array_diff($ungrouped, [get_default_connection_id()]);
+		}
+
+		return $ungrouped;
+	}
 
 	public static function setModelInstance(Object $model_instance){
 		static::$model_instance = $model_instance;
@@ -424,10 +524,14 @@ class DB
 	}
 
 	// Returns last executed query 
-	public static function getLog(){
+	static public function getLog(){
 		if (!is_null(static::$raw_sql)){
-			$sql = Arrays::str_replace_array('?', static::$values, static::$raw_sql);
-			$sql = trim(preg_replace('!\s+!', ' ', $sql)).';';
+			$sql = Arrays::strReplace('?', static::$values, static::$raw_sql);
+			$sql = trim(preg_replace('!\s+!', ' ', $sql));
+
+			if (!Strings::endsWith(';', $sql)){
+				$sql .= ';';
+			}
 
 			return $sql;	
 		}
@@ -435,6 +539,31 @@ class DB
 		if (static::$model_instance != NULL){
 			return static::$model_instance->getLog();
 		}
+	}
+
+	static private function dd($pre_compiled_sql, $bindings){		
+		foreach($bindings as $ix => $val){			
+			if(is_null($val)){
+				$bindings[$ix] = 'NULL';
+			}elseif(isset($vars[$ix])){
+				$bindings[$ix] = "'$val'";
+			}elseif(is_int($val)){
+				// pass
+			}
+			elseif(is_bool($val)){
+				// pass
+			} elseif(is_string($val))
+				$bindings[$ix] = "'$val'";	
+		}
+
+		$sql = Arrays::strReplace('?', $bindings, $pre_compiled_sql);
+		$sql = trim(preg_replace('!\s+!', ' ', $sql));
+
+		if (!Strings::endsWith(';', $sql)){
+			$sql .= ';';
+		}
+				
+		return $sql;
 	}
 
 	// SET autocommit=0;
@@ -467,7 +596,7 @@ class DB
 			return $obj;	
 		}
 
-		static::$model_instance = $obj = new MyModel($connect);
+		static::$model_instance = (new MyModel($connect));
 		static::$tb_name = static::$model_instance->getTableName();  //
 
 		$st = static::$model_instance->fromRaw($from);	
@@ -510,18 +639,25 @@ class DB
 			return;
 		}
 
-		#d("Inicio de transacción para => ". static::getCurrentConnectionId());
+		#dd("Inicio de transacción para => ". static::getCurrentConnectionId());
 
+		try {
+			static::getConnection()->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+			static::getConnection()->beginTransaction();
 
-		/* 
-		  Not much to it! Forcing PDO to throw exceptions instead errors is the key to being able to use the try / catch which simplifies the logic needed to perform the rollback.
-		*/
-		static::getConnection()->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-		static::getConnection()->beginTransaction();
-		static::$inited_transaction = true;
+			static::$inited_transaction = true;
+		} catch (\Exception $e){
+			
+		} finally {
+        	static::$inited_transaction = false;
+    	}		
 	}
 
 	public static function commit(){
+		if (phpversion() >= 8){
+			return;
+		}
+
 		if (!static::$inited_transaction){
 			// nothing to do
 			return;
@@ -532,6 +668,10 @@ class DB
 	}
 
 	public static function rollback(){
+		if (phpversion() >= 8){
+			return;
+		}
+
 		if (!static::$inited_transaction){
 			// nothing to do
 			return;
@@ -544,6 +684,10 @@ class DB
 	// https://github.com/laravel/framework/blob/4.1/src/Illuminate/DB/Connection.php#L417
 	public static function transaction(\Closure $callback)
     {		
+		if (phpversion() >= 8){
+			return $callback();
+		}
+
 		if (static::$inited_transaction){
 			// don't start it again!
 			return;
@@ -566,11 +710,15 @@ class DB
 	//
 	// https://laravel.com/docs/5.0/database
 	//
-	public static function select(string $raw_sql, ?Array $vals = null, $fetch_mode = 'ASSOC', ?string $tenant_id = null, bool $only_one = false){
+	public static function select(string $raw_sql, $vals = null, $fetch_mode = 'ASSOC', $tenant_id = null, bool $only_one = false, bool $close_cursor = false, bool $tb_prefix = true, &$st = null){
 		if ($vals === null){
 			$vals = [];
 		}
 		
+		if ($tb_prefix){
+			$raw_sql = Model::addPrefix($raw_sql);
+		}		
+
 		static::$raw_sql = $q = $raw_sql;
 		static::$values  = $vals; 
 
@@ -581,7 +729,7 @@ class DB
 
 		///////////////[ BUG FIXES ]/////////////////
 
-		$driver = DB::driver();
+		$driver = static::driver();
 
 		if (!empty($vals))
 		{
@@ -591,7 +739,7 @@ class DB
 			foreach($vals as $ix => $val)
 			{				
 				if($val === NULL){
-					$q = Strings::replaceNth('?', 'NULL', $q, $ix+1-$reps);
+					$q = Strings::replaceNth('?', 'NULL', $q, (int) $ix+1-$reps);
 					$reps++;
 
 				/*
@@ -611,8 +759,8 @@ class DB
 		
 		///////////////////////////////////////////
 
-		$current_id_conn = DB::getCurrentConnectionId();
-		$conn = DB::getConnection($tenant_id);
+		$current_id_conn = static::getCurrentConnectionId();
+		$conn = static::getConnection($tenant_id);
 		
 		try {
 			$st = $conn->prepare($q);			
@@ -639,8 +787,7 @@ class DB
 				elseif(is_array($val)){
 					throw new \Exception("where value can not be an array!");				
 				}else {
-					var_dump($val);
-					throw new \Exception("Unsupported type");
+					throw new \Exception("Unsupported type: " . var_export($val, true));
 				}	
 
 				$st->bindValue($ix +1 , $val, $type);
@@ -656,27 +803,45 @@ class DB
 				$result = $st->fetch($fetch_const);
 			} else {
 				$result = $st->fetchAll($fetch_const);
+
+				if ($close_cursor){
+					$st->closeCursor();
+				}
 			}
 
 		} catch (\Exception $e){
-			$error = $e->getMessage();
-			
-			$msg = "Error: $error.";
+			// logger($e->getMessage());
+			// log_sql(static::getLog());
 
-			if (config()['debug']){
-				$data = var_export($vals, true);
-				$msg .= "Query: $q. Data: $data";
-			}
-
-			throw new \Exception($msg);
+			throw ($e);
 		} finally {	
 			// Restore previous connection
 			if (!empty($current_id_conn)){
-				DB::setConnection($current_id_conn);
+				static::setConnection($current_id_conn);
 			}
 		}
 
 		return $result;
+	}
+
+	/*
+		SP SELECT
+
+		Resuelve varios problemas presentes al hacer un fetchAll sobre un Store Procedure (SP)
+
+		Ej:
+
+		DB::safeSelect("CALL partFinder(?, ?, ?)", [$partNumExact, $namePartial, $descriptionPartial])
+
+		Ver
+
+		https://stackoverflow.com/a/17582620/980631
+	*/
+	public static function SafeSelect(string $raw_sql, $vals = null, $fetch_mode = 'ASSOC', $tenant_id = null, &$st = null){
+		$conn = static::getConnection($tenant_id);
+		$conn->setAttribute(\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+
+		return static::select($raw_sql, $vals, $fetch_mode, $tenant_id, false, true, $st);
 	}
 
 	public static function selectOne(string $raw_sql, ?Array $vals = null, $fetch_mode = 'ASSOC', ?string $tenant_id = null, bool $only_one = false){
@@ -684,21 +849,22 @@ class DB
 	}
 
 	public static function truncate(string $table, ?string $tenant_id = null){
-		DB::getConnection($tenant_id);
+		static::getConnection($tenant_id);
 		static::statement("TRUNCATE TABLE `$table`");
 	}
 
-	public static function insert(string $raw_sql, Array $vals = [], $tenant_id = null, $prikey_name = 'ID')
+	public static function insert(string $raw_sql, Array $vals = [], $tenant_id = null, $prikey_name = 'id')
 	{
-		static::$raw_sql = $q = $raw_sql;
+		static::$raw_sql = $raw_sql;
 		static::$values  = $vals; 
-		$q = $raw_sql;
+		
+		$raw_sql = Model::addPrefix($raw_sql);
 	
-		$current_id_conn = DB::getCurrentConnectionId();
-		$conn = DB::getConnection($tenant_id);
+		$current_id_conn = static::getCurrentConnectionId();
+		$conn = static::getConnection($tenant_id);
 
 		try {
-			$st = $conn->prepare($q);
+			$st = $conn->prepare($raw_sql);
 
 			if (is_null($vals)){
 				$vals = [];
@@ -724,10 +890,9 @@ class DB
 					// https://stackoverflow.com/a/36724762/980631
 					$type = \PDO::PARAM_LOB;  // 3
 				elseif(is_array($val)){
-					throw new \Exception("where value can not be an array!");				
+					throw new \Exception("WHERE clasuule value can not be an array: " . var_export($val, true));				
 				}else {
-					var_dump($val);
-					throw new \Exception("Unsupported type");
+					throw new \Exception("Unsupported type: " . var_export($val, true));
 				}	
 
 				$st->bindValue($ix +1 , $val, $type);
@@ -749,10 +914,10 @@ class DB
 
 			if ($result){
 				// sin schema no hay forma de saber la PRI Key. Intento con 'id' 
-				$id_name = ($schema != NULL) ? $schema['id_name'] : ($prikey_name ?? static::$default_primary_key_name);	
+				$id_name = ($schema != NULL) ? $schema['id_name'] : ($prikey_name ?? static::$default_primary_key_name);		
 
 				if (isset($data[$id_name])){
-					$last_inserted_id =	$data[$id_name];
+					$last_inserted_id =	$vals[$id_name]; // probable fix -19/02/2024
 				} else {
 					$last_inserted_id = $conn->lastInsertId();
 				}
@@ -763,7 +928,7 @@ class DB
 		} finally {
 			// Restore previous connection
 			if (empty(!$current_id_conn)){
-				DB::setConnection($current_id_conn);
+				static::setConnection($current_id_conn);
 			}
 		}
 		
@@ -773,15 +938,16 @@ class DB
 
 	public static function statement(string $raw_sql, Array $vals = [], ?string $tenant_id = null)
 	{
-		static::$raw_sql = $q = $raw_sql;
+		static::$raw_sql = $raw_sql;
 		static::$values  = $vals; 
-		$q = $raw_sql;
+		
+		$sql = Model::addPrefix($raw_sql);
 	
-		$current_id_conn = DB::getCurrentConnectionId();
-		$conn = DB::getConnection($tenant_id);
+		$current_id_conn = static::getCurrentConnectionId();
+		$conn            = static::getConnection($tenant_id);
 
 		try {
-			$st = $conn->prepare($q);
+			$st = $conn->prepare($sql);
 
 			if (is_null($vals)){
 				$vals = [];
@@ -807,14 +973,14 @@ class DB
 					// https://stackoverflow.com/a/36724762/980631
 					$type = \PDO::PARAM_LOB;  // 3
 				elseif(is_array($val)){
-					throw new \Exception("where value can not be an array!");				
+					throw new SqlException("The value for WHERE can not be an array!");				
 				}else {
-					var_dump($val);
-					throw new \Exception("Unsupported type");
+					throw new SqlException("Unsupported type: " . var_export($val, true));
 				}	
 
 				$st->bindValue($ix +1 , $val, $type);
 			}
+		
 
 			if($st->execute()) {
 				$count = $st->rowCount();
@@ -822,13 +988,13 @@ class DB
 				$count = false;
 
 		} catch (\Exception $e){
-			Logger::log($e->getMessage());
-			throw new \Exception($e->getMessage());
-				
+			logger($e->getMessage());
+			log_sql(static::getLog());
+			throw ($e);				
 		} finally {
 			// Restore previous connection
 			if (!empty($current_id_conn)){
-				DB::setConnection($current_id_conn);
+				static::setConnection($current_id_conn);
 			}
 		}
 		
@@ -856,6 +1022,18 @@ class DB
 	}
 
 	/*
+		Escapa strings que pudieran contener comillas dobles
+
+		Util cuando se hace un INSERT de un campo tipo JSON
+	*/
+	static function quoteValue(string $val){
+		$conn = static::getConnection();
+		return $conn->quote($val);
+	}
+
+	/*
+		Rodea con las comillas correctas campos y nombres de tablas
+
 		https://stackoverflow.com/a/10574031/980631
 		https://dba.stackexchange.com/questions/23129/benefits-of-using-backtick-in-mysql-queries
 	*/
@@ -863,30 +1041,30 @@ class DB
 		$d1 = '';
 		$d2 = '';
 
-		switch (DB::driver()){
-			case DB::MYSQL:
+		switch (static::driver()){
+			case static::MYSQL:
 				$d1 = $d2 = "`";
 				break;
-			case DB::PGSQL:
+			case static::PGSQL:
 				$d1 = $d2 = '"';
 				break;
-			case DB::SQLSRV:
+			case static::SQLSRV:
 				// SELECT [select] FROM [from] WHERE [where] = [group by];
 				$d1 = '[';
 				$d2 = ']';
 				break;
-			case DB::SQLITE:
+			case static::SQLITE:
 				$d1 = $d2 = '"';
 				break;
-			case DB::INFOMIX:
+			case static::INFOMIX:
 				return $str;
-			case DB::ORACLE:
+			case static::ORACLE:
 				$d1 = $d2 = '"';
 				break;
-			case DB::DB2:
+			case static::DB2:
 				$d1 = $d2 = '"';
 				break;
-			case DB::SYBASE:
+			case static::SYBASE:
 				$d1 = $d2 = '"';
 				break;
 			default:
@@ -910,26 +1088,266 @@ class DB
 		https://stackoverflow.com/questions/19412/how-to-request-a-random-row-in-sql
 	*/
 	static function random(){
-		switch (DB::driver()){
-			case DB::MYSQL:
-			case DB::SQLITE:
-			case DB::INFOMIX:
-			case DB::FIREBIRD:
+		switch (static::driver()){
+			case static::MYSQL:
+			case static::SQLITE:
+			case static::INFOMIX:
+			case static::FIREBIRD:
 				return ' ORDER BY RAND()';
-			case DB::PGSQL:
+			case static::PGSQL:
 				return ' ORDER BY RANDOM()';
-			case DB::SQLSRV:
+			case static::SQLSRV:
 				// SELECT TOP 1 * FROM MyTable ORDER BY newid()
 				return ' ORDER BY newid()';
 			default: 
 				throw new \Exception("Not implemented");	
 		}
 	}
+
+	/*
+		Similar a SHOW TABLES pero incluye mucha info extra como el tipo de "engine" y "collation" de cada tabla, etc
+
+		Valida para MYSQL
+	*/
+	static function status(){
+		return static::select("SHOW TABLE STATUS");
+	}
+
+	/*
+		Optimiza tablas en MySQL -- chequear si existe equivalente para otros motores
+
+		Retorna algo como:
+
+		--| api_keys
+		Array
+		(
+			[0] => Array
+				(
+					[Table] => simplerest.api_keys
+					[Op] => optimize
+					[Msg_type] => status
+					[Msg_text] => OK
+				)
+
+		)
+
+	*/
+	static function optimize($tables, bool $quote = false){
+		if (is_array($tables)){
+			if ($quote){
+				$tables = array_map([static::class, 'quote'], $tables);
+			}
+
+			$tables = implode(', ', $tables);
+		} else {
+			if ($quote){
+				$tables = static::quote($tables);
+			}
+		}
+
+		return static::select("OPTIMIZE TABLE $tables");
+	}
+
+	/*
+		Efectua proceso de reparacion de tablas en MYSQL
+
+		Retorna algo como:
+
+		--| api_keys
+		Array
+		(
+			[0] => Array
+				(
+					[Table] => simplerest.api_keys
+					[Op] => repair
+					[Msg_type] => note
+					[Msg_text] => The storage engine for the table doesn't support repair <--- tomar nota de esto
+				)
+		)
+	*/
+	static function repair($tables, bool $quote = false){
+		if (is_array($tables)){
+			if ($quote){
+				$tables = array_map([static::class, 'quote'], $tables);
+			}
+
+			$tables = implode(', ', $tables);
+		} else {
+			if ($quote){
+				$tables = static::quote($tables);
+			}
+		}
+
+		return static::select("REPAIR TABLE $tables");
+	}
+
+	/*
+		Queues
+	*/
 	
-	static function whois(){
-        return strrev(Strings::interlace([
-            '.ersrshi l >o.im Aslto<oozBobPy ear rwmr sRlmS ',
-            'dvee tgrlA.mclagT uucb lzo la bdteckoeafteepi'
-        ])) . PHP_EOL;
-    }
+	/*
+		Ej:
+
+		enqueue([        
+			'user_id' => $user_id
+		]);
+	*/
+	static function enqueue($data, $category = null) {
+		$tb = (object) table("queue");
+
+		$tb->insert([
+			'category' => $category,
+			'data'     => json_encode($data)
+		]);
+	}
+
+	/*
+		Ej:
+
+		$row     = deque();
+
+		$user_id = $row['user_id'];
+		// ....
+	*/
+	static function deque($category = null, bool $full_row = false) {
+		$tb = (object) table("queue");
+
+		$row = $tb
+		->when(!empty($category), function ($q) use ($category) {
+			$q->where(["category" => $category]);
+		})
+		->orderBy([
+			'id' => 'asc'
+		])
+		->getOne();
+		
+		if (empty($row)){
+			return false;
+		}
+
+		$id          = $row['id'];
+		$row['data'] = json_decode($row['data'], true);
+
+		$tb = (object) table("queue");
+		$tb->where(['id' => $id])->delete();
+
+		return $full_row ? $row : $row['data'];
+	}
+
+	/**
+	 * Truncates the MySQL general log table.
+	 *
+	 * This function executes a TRUNCATE statement on the `mysql`.`general_log` table to clear its contents.
+	 * 
+	 * @return void
+	 */
+	static function dbLogTruncate(){
+		DB::statement("TRUNCATE `mysql`.`general_log`");
+	}
+
+	/**
+	 * Dumps the MySQL general log.
+	 *
+	 * This function retrieves the contents of the `mysql`.`general_log` table. Depending on the parameters,
+	 * it can filter and clean the log entries, and optionally write them to a file named 'sql_log.txt'.
+	 *
+	 * @param bool $to_file Optional. Default is false. If true, writes the log entries to a file.
+	 * @param bool $clean Optional. Default is true. If true, filters out non-SQL commands and a specific query from the log.
+	 * @param bool $only_sql Optional. Default is true. If true, returns only the SQL statements from the log.
+	 * @return array The filtered rows from the general_log table or just the SQL statements, depending on $only_sql.
+	 */
+	static function dbLogDump(bool $to_file = false, bool $clean = true, $only_sql = true){
+		DB::getConnection();
+
+		DB::statement("USE `mysql`;");
+
+		$m = (object) table('general_log');
+
+		$prefix = DB::getTablePrefix();
+
+		if (!empty($prefix)){
+			$m->removePrefix($prefix);
+		}
+
+		$rows = $m
+		->get();
+
+		if ($clean){
+			foreach ($rows as $ix => $row){
+				$argument  = trim($row['argument']);
+				$comm_type = trim($row['command_type']);
+
+				if ($comm_type != 'Execute' || $argument == 'SELECT * FROM `general_log`'){
+					unset($rows[$ix]);
+				}
+			}
+		}
+
+		if ($only_sql){
+			$rows = array_column($rows, 'argument');
+		} else {
+			$rows = array_values($rows);
+		}
+		
+		if ($to_file){
+			Logger::dd($rows, 'sql_log.txt');
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Enables MySQL general logging and truncates the log table.
+	 *
+	 * This function truncates the `mysql`.`general_log` table and then sets the global general_log variable to ON,
+	 * enabling the MySQL general logging.
+	 * 
+	 * @return void
+	 */
+	static function dbLogOn(){
+		static::dbLogTruncate();
+		DB::statement("SET global general_log = 'ON';");
+	}
+
+	/**
+	 * Disables MySQL general logging.
+	 *
+	 * This function sets the global general_log variable to OFF, disabling the MySQL general logging.
+	 * 
+	 * @return void
+	 */
+	static function dbLogOff(){
+		DB::statement("SET global general_log = 'OFF';");
+	}
+
+	/**
+	 * Starts MySQL general logging.
+	 *
+	 * This function enables MySQL general logging and sets the log output to a specified file or to the `mysql`.`general_log` table.
+	 * If the $filename parameter is provided, it sets the log output to the specified file. The filename path must follow
+	 * Linux format even on Windows.
+	 *
+	 * @param string|null $filename Optional. The file path to log the output. If null, logs to the table.
+	 * @return void
+	 */
+	static function dbLogStart($filename = null){
+		static::dbLogOn();
+
+		if ($filename == null){
+			DB::statement("SET global log_output = 'table';"); // Logs to mysql.general_log
+		} else {
+			if (!Strings::containsAny(['/', '\\'], $filename)){
+				$filename = LOGS_PATH . $filename;
+			} else {
+				if (!Files::isAbsolutePath($filename)){
+					$filename = ROOT_PATH . $filename;
+				}
+			}
+
+			$filename = Files::convertSlashes($filename, Files::LINUX_DIR_SLASH);
+
+			DB::statement("SET global general_log_file = '$filename';"); 
+		}
+	}
+
 }

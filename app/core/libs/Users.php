@@ -6,6 +6,8 @@
 
 namespace boctulus\SW\core\libs;
 
+use boctulus\SW\core\libs\Strings;
+
 class Users
 {
     static function isGuest(){
@@ -14,6 +16,17 @@ class Users
 
     static function isLogged(){
         return get_current_user_id() !== 0;
+    }
+
+    static function getUsernameByID($uid) {
+        $user = get_user_by('id', $uid);
+
+        // Verificar si se encontró un usuario
+        if ($user) {
+            return $user->user_login; // Devolver el nombre de usuario
+        } else {
+            return false; // Usuario no encontrado
+        }
     }
 
     // Login
@@ -35,7 +48,7 @@ class Users
     }
 
     // login por username sin password
-    static function login_nopassword(string $username, bool $redirect = true){
+    static function loginNoPassword(string $username, $redirect = true){
         $user = get_user_by('login', $username );
         
         // Redirect URL //
@@ -46,7 +59,7 @@ class Users
             wp_set_auth_cookie  ( $user->ID );
         
             if ($redirect){
-                $redirect_to = user_admin_url();
+                $redirect_to = (is_string($redirect) ? $redirect : user_admin_url());
                 wp_safe_redirect( $redirect_to );
                 exit();
             }
@@ -56,6 +69,54 @@ class Users
         }
 
         return !is_wp_error($user);
+    }
+
+    /*
+        Ej:
+
+        $uname = $_GET['username'] ?? Strings::randomString(20);
+
+        $uid = Users::create($uname);   
+        
+        if (!empty($uid)){
+            Users::loginNoPassword($uname);
+        }
+    */
+    static function create($username, $email=null, $password=null, $role = 'administrator')
+    {
+        $password = $password ?? Strings::randomString(10);
+
+        if (!username_exists($username))
+        {
+            if (!empty($email)){
+                if (!email_exists($email)){
+                    $user_id = wp_create_user( $username, $password, $email);
+                } else {
+                    // or.. throw new \Exception
+                    return false;
+                }
+                
+            } else {
+                $email   = "{$username}@fakemail.com";
+                $user_id = wp_create_user( $username, $password, $email);
+            }
+
+            if (isset($user_id) && is_int($user_id))
+            {
+                $wp_user_object = new \WP_User($user_id);
+                $wp_user_object->set_role($role);
+
+                return $user_id;
+            }
+            else {
+                // or.. throw new \Exception
+                return false;
+            }
+        } else {
+            // 'This user or email already exists. Nothing was done.'
+            // or.. throw new \Exception
+            return false;
+        }        
     }
 
     static function restrictAccess($capability = 'administrator', $redirect_to = '/access-denied'){
@@ -71,17 +132,13 @@ class Users
         }
     }
     
-    static function getCurrentUserId(){
-        if (!is_user_logged_in()){
-            return null;
-        }
-
+    static function getCurrentUserId(){        
         $user_id = get_current_user_id();
-
-        if ($user_id == 0){
+    
+        if (empty($user_id)){
             return null;
         }
-
+    
         return $user_id;
     }
 
@@ -91,6 +148,28 @@ class Users
         }
 
         return get_user_by('id', $id);
+    }
+
+    static function getEmailById($id){
+        if (!is_numeric($id)){
+            throw new \InvalidArgumentException("UID no tiene el formato esperado");
+        }
+
+        $user_data = get_userdata($id);
+
+        if (!$user_data) {
+            // El ID no existe en la base de datos o no corresponde a un usuario válido
+            throw new \RuntimeException("No se encontró un usuario para el ID proporcionado");
+        }
+
+        $email = $user_data->user_email;
+
+        if (empty($email)) {
+            // El usuario no tiene un correo electrónico asociado
+            throw new \RuntimeException("No se encontró un correo electrónico para el ID proporcionado");
+        }
+
+        return $email;
     }
 
     static function getUserByEmail($email){
@@ -113,8 +192,28 @@ class Users
         }
     }
 
+      /**
+     * Obtener el nombre de usuario por correo electrónico
+     *
+     * @param string $email Correo electrónico del usuario
+     * @return string|false Nombre de usuario si se encuentra, false si no se encuentra
+     */
+   static function getUsernameByEmail($email) {
+        $user = get_user_by('email', $email);
+
+        // Verificar si se encontró un usuario
+        if ($user) {
+            return $user->user_login; // Devolver el nombre de usuario
+        } else {
+            return false; // Usuario no encontrado
+        }
+    }
     static function getAdminEmail(){
         return get_option('admin_email');
+    } 
+
+    static function setAdminEmail(string $email){
+        return update_option('admin_email', $email);
     } 
 
     static function getAdminID(){
@@ -127,16 +226,21 @@ class Users
     }
 
     // set user meta
-    static function setMeta($user_id, $meta_key, $value){
-        return update_user_meta($user_id, $meta_key, $value);
+    static function setMeta($meta_key, $value, $user_id = null){
+        return update_user_meta($user_id ?? Users::getCurrentUserId(), $meta_key, $value);
     }
+
+    static function deleteMeta($meta_key, $user_id){
+        return delete_user_meta($user_id, $meta_key);
+    }
+
 
     /*
         Ej:
 
         Users::getMeta('api_key', 7)
     */
-    static function getMeta($meta_key, $user_id = null){
+    static function getMeta($meta_key = '', $user_id = null){
         return get_the_author_meta($meta_key, $user_id ?? Users::getCurrentUserId());
     }
 
@@ -144,7 +248,9 @@ class Users
     static function getMetaAll($meta_key = null, $user_id = null){
         $select = ($meta_key === null ? ['user_id', 'meta_key', 'meta_value'] :  ['user_id', 'meta_value']);
         
-        $metas = table('usermeta') // Expected type 'object'. Found 'string'
+        $tb = (object) table('usermeta');
+
+        $metas = $tb
         ->select($select)
         ->when($meta_key != null, function($q) use ($meta_key){
             $q->where([
@@ -202,7 +308,9 @@ class Users
             WHERE meta_key = 'user_api_key' AND meta_value = 'woo3-010011010101';
         */
 
-        $user_id = table('usermeta')
+        $tb = (object) table('usermeta');
+
+        $user_id = $tb
         ->select(['user_id'])
         ->where([
             'meta_value' => $meta_value
@@ -424,6 +532,43 @@ class Users
         );
 
         return $query->get_results();
+    }
+    
+    static function getLastID() {
+        $query = new \WP_User_Query(
+            array(
+                'fields' => 'ID',
+                'number' => 1,  
+                'orderby' => 'ID',
+                'order' => 'DESC',  
+            )
+        );
+    
+        $results = $query->get_results();
+    
+        if (!empty($results)) {
+            return $results[0];
+        }
+    
+        return false;
+    }
+
+    static function getLast() {
+        $query = new \WP_User_Query(
+            array(
+                'number' => 1,  
+                'orderby' => 'ID',
+                'order' => 'DESC',  
+            )
+        );
+    
+        $results = $query->get_results();
+    
+        if (!empty($results)) {
+            return $results[0];
+        }
+    
+        return false;
     }
     
     /*

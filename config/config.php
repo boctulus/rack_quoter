@@ -1,14 +1,34 @@
 <?php
 
+use boctulus\SW\core\libs\Env;
+
+
 return [
-    'wait_for_wc'       => true,  // <-- 
+    'is_enabled'   => Env::get('ENABLED', true),
+    
+    'app_name'     => Env::get('APP_NAME'),
+    'namespace'    => "boctulus\SW",  
+    'use_composer' => false, // 
 
-    'DateTimeZone'      => 'Asia/Manila',
-    'api_key'           => null,
+    ////////////////////////////////////////////////////////////////////////////////
 
-    'app_name'          => env('APP_NAME'),
-    'namespace'         => "boctulus\SW", 
-    'use_composer'      => false,
+    'options' => [
+    //     'op1' => 'value 1',
+    //     'op2' => 'value 2'
+    ],
+    
+	// "field_separator" => ";",
+
+	"memory_limit" => "1024M",
+	"max_execution_time" => 600,
+	// "upload_max_filesize" => "50M",
+	// "post_max_size" => "50M",
+
+    //
+    // No editar desde aqui
+    //
+
+    'tmp_dir' => sys_get_temp_dir(),
 
     /*
         Intercepta errores
@@ -22,7 +42,7 @@ return [
         Ver 'log_sql'
     */
 
-    'debug'             => env('DEBUG'),
+    'debug'             => Env::get('DEBUG'),
 
     'log_file'          => 'log.txt',
     
@@ -49,10 +69,30 @@ return [
 
     'log_stack_trace'  => false,
 
+    'paginator' => [
+		'max_limit' => 50,
+		'default_limit' => 10,
+		'position' => 'TOP',
+		'params'   => [
+			'pageSize' => 'size',
+			'page'	   => 'page_num' // redefinido para WordPress
+		],
+		'formatter' => function ($row_count, $count, $current_page, $page_count, $page_size, $nextUrl){
+			return [
+				"last_page" => $page_count,
+				'paginator' => [
+					"total"       => $row_count, 
+					"count"       => $count,
+					"currentPage" => $current_page,
+					"totalPages"  => $page_count,
+					"pageSize"    => $page_size,
+					"nextUrl"	  => $nextUrl
+				],
+			];
+		},
+	],
+
     'front_controller' => true,
     'router'           => true,
-
-    // dejar en false para no chequear certificado
-    'ssl_cert'         => false
 ];
 

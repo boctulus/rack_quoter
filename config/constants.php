@@ -17,10 +17,10 @@ if (!defined('WP_CONTENT_PATH')){
 }
 
 if (!defined('CONFIG_PATH'))
-	define('CONFIG_PATH', ROOT_PATH  . 'config' . DIRECTORY_SEPARATOR);
+    define('CONFIG_PATH', ROOT_PATH  . 'config' . DIRECTORY_SEPARATOR);
 
 if (!defined('DOCS_PATH'))
-	define('DOCS_PATH', ROOT_PATH  . 'docs' . DIRECTORY_SEPARATOR);
+    define('DOCS_PATH', ROOT_PATH  . 'docs' . DIRECTORY_SEPARATOR);
 
 if (!defined('UPLOADS_PATH'))
     define('UPLOADS_PATH', WP_ROOT_PATH . 'wp-content'. DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR);
@@ -42,19 +42,19 @@ if (!defined('APP_PATH'))
     define('APP_PATH', ROOT_PATH . 'app' . DIRECTORY_SEPARATOR);
 
 if (!defined('BACKUP_PATH'))
-	define('BACKUP_PATH', ROOT_PATH  . 'backup' . DIRECTORY_SEPARATOR);
+    define('BACKUP_PATH', ROOT_PATH  . 'backup' . DIRECTORY_SEPARATOR);
 
 if (!defined('UPDATE_PATH'))
-	define('UPDATE_PATH', ROOT_PATH  . 'updates' . DIRECTORY_SEPARATOR);
+    define('UPDATE_PATH', ROOT_PATH  . 'updates' . DIRECTORY_SEPARATOR);
 
 if (!defined('CORE_PATH'))
     define('CORE_PATH', APP_PATH . 'core'. DIRECTORY_SEPARATOR);
 
 if (!defined('CORE_INTERFACE_PATH'))
-	define('CORE_INTERFACE_PATH', CORE_PATH  . 'interfaces' . DIRECTORY_SEPARATOR);    
+    define('CORE_INTERFACE_PATH', CORE_PATH  . 'interfaces' . DIRECTORY_SEPARATOR);    
 
 if (!defined('CORE_TRAIT_PATH'))
-	define('CORE_TRAIT_PATH', CORE_PATH  . 'traits' . DIRECTORY_SEPARATOR);
+    define('CORE_TRAIT_PATH', CORE_PATH  . 'traits' . DIRECTORY_SEPARATOR);
 
 if (!defined('CORE_LIBS_PATH'))
     define('CORE_LIBS_PATH', CORE_PATH  . 'libs' . DIRECTORY_SEPARATOR);
@@ -64,7 +64,7 @@ if (!defined('CORE_HELPERS_PATH'))
 
 
 if (!defined('TEMPLATES_PATH'))
-	define('TEMPLATES_PATH', CORE_PATH  . 'templates' . DIRECTORY_SEPARATOR);
+    define('TEMPLATES_PATH', CORE_PATH  . 'templates' . DIRECTORY_SEPARATOR);
 
 if (!defined('MODELS_PATH'))
     define('MODELS_PATH', APP_PATH . 'models'. DIRECTORY_SEPARATOR);   
@@ -81,11 +81,15 @@ if (!defined('TASKS_PATH')){
     define('TASKS_PATH', APP_PATH . 'jobs/tasks' . DIRECTORY_SEPARATOR);
 }
 
+if (!defined('COMMANDS_PATH')){  // --------------------------------------------------------- new
+    define('COMMANDS_PATH', APP_PATH . 'commands' . DIRECTORY_SEPARATOR);
+}
+
 if (!defined('MIGRATIONS_PATH'))
     define('MIGRATIONS_PATH', APP_PATH . 'migrations'. DIRECTORY_SEPARATOR);   
 
 if (!defined('ETC_PATH'))
-    define('ETC_PATH', APP_PATH . 'etc'. DIRECTORY_SEPARATOR);     
+    define('ETC_PATH', ROOT_PATH . 'etc'. DIRECTORY_SEPARATOR);     
 
 if (!defined('VIEWS_PATH'))
     define('VIEWS_PATH', APP_PATH .  'views' . DIRECTORY_SEPARATOR);  
@@ -103,7 +107,7 @@ if (!defined('API_PATH'))
     define('API_PATH', CONTROLLERS_PATH  . 'api' . DIRECTORY_SEPARATOR); 
 
 if (!defined('INTERFACE_PATH'))
-	define('INTERFACE_PATH', APP_PATH  . 'interfaces' . DIRECTORY_SEPARATOR); 
+    define('INTERFACE_PATH', APP_PATH  . 'interfaces' . DIRECTORY_SEPARATOR); 
 
 if (!defined('LIBS_PATH'))
     define('LIBS_PATH', APP_PATH . 'libs' . DIRECTORY_SEPARATOR);   
@@ -140,7 +144,7 @@ if (!defined('JS_PATH'))
     define('JS_PATH', ASSETS_PATH . 'js' . DIRECTORY_SEPARATOR);         
 
 if (!defined('SCRIPTS_PATH'))
-	define('SCRIPTS_PATH', ROOT_PATH  . 'scripts' . DIRECTORY_SEPARATOR);
+    define('SCRIPTS_PATH', ROOT_PATH  . 'scripts' . DIRECTORY_SEPARATOR);
 
 if (!defined('CORE_SCRIPTS_PATH'))
-	define('CORE_SCRIPTS_PATH', CORE_PATH  . 'scripts' . DIRECTORY_SEPARATOR);
+    define('CORE_SCRIPTS_PATH', CORE_PATH  . 'scripts' . DIRECTORY_SEPARATOR);

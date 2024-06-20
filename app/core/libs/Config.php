@@ -57,6 +57,13 @@ class Config
             static::setup();
         }
 
+        // Check if the property is null or '/'
+        if ($property === null || $property === '/' || $property === '.' || $property === '') {
+            // Merge the new value with the root array
+            static::$data = array_merge(static::$data, $value);
+            return;
+        }
+        
         // Split the property into an array of keys
         $keys = explode('.', $property);
         $tempArray = &static::$data;

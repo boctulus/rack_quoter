@@ -3,11 +3,14 @@
 use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\Url;
 
+/*
+    View
+*/
 
 $cfg  = Config::get();
 
-$dims = $cfg['dims'];
-
+$dims = $cfg['dims'] or die("Falta definir dims en config.php");
+s
 ?>
 
 <script>
@@ -423,7 +426,7 @@ $dims = $cfg['dims'];
                   </div>
                   <div class="row" class="main-img">
                     <div class="col-12">
-                      <img src="<?= asset('img/1x1-00ff007f.png') ?>" class="img-responsive" id="rendered-img">
+                      <img src="<?= asset('/img/1x1-00ff007f.png') ?>" class="img-responsive" id="rendered-img">
                     </div>
                   </div>
                   <div class="row">

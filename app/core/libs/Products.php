@@ -700,7 +700,7 @@ class Products extends Posts
 
         In WooCommerce, they are all prepended with 'pa_'
     */
-    static function getTermIdsByTaxonomy(string $taxonomy)
+    static function getTermIdsByTaxonomy(string $taxonomy, $prefix = 'pa_')
     {
         global $wpdb;
 
@@ -718,7 +718,7 @@ class Products extends Posts
 
         Borra los terminos agregados con insertAttTerms() de la tabla 'wp_terms' por taxonomia (pa_forma_farmaceutica, etc)
     */
-    static function deleteTermByName(string $taxonomy, $args = [])
+    static function deleteTermByName(string $term_name, string $taxonomy, $args = [])
     {
         if (!Strings::startsWith('pa_', $taxonomy)) {
             $taxonomy = 'pa_' . $taxonomy;

@@ -458,7 +458,11 @@ class Files
 	
         $path = implode('/', $nuevaRuta);
 
-		return static::convertSlashes($path, $to_slash);
+		$ret = static::convertSlashes($path, $to_slash);
+		$ret = str_replace('//', '/', $ret);
+		$ret = str_replace('\\\\', '\\', $ret);
+		
+		return $ret;
 	}
 
 	static function isAbsolutePath(string $path){

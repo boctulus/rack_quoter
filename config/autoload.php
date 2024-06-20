@@ -15,6 +15,7 @@ return [
         __DIR__ . '/../app/core/helpers/factories.php',
         __DIR__ . '/../app/core/helpers/view.php',
         __DIR__ . '/../app/core/helpers/db.php',
+        __DIR__ . '/../app/core/helpers/i18n.php',        
     ],
 
     'exclude' => [

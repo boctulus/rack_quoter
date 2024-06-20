@@ -16,7 +16,7 @@ class BootstrapPaginator {
     */
     static function render($data, int $short_after = 5, bool $show_last = false)
     {
-        $page_key    = Config::get()['paginator']['params']['page'] ?? 'page';
+        $page_key    = config()['paginator']['params']['page'] ?? 'page';
         $current_url = Url::currentUrl();
     ?>
         <nav aria-label="Page navigation">

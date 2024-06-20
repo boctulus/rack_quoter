@@ -6,10 +6,8 @@
 
 namespace boctulus\SW\core\libs;
 
-use boctulus\SW\core\libs\Config;
-
-use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
 
 require_once ABSPATH . 'wp-includes/PHPMailer/Exception.php';
 require_once ABSPATH . 'wp-includes/PHPMailer/PHPMailer.php';
@@ -27,7 +25,7 @@ require_once ABSPATH . 'wp-includes/PHPMailer/SMTP.php';
     Mail::debug(4);
     //Mail::silentDebug();
 
-    Mail::Config::get([
+    Mail::config([
         'ssl' => [
             'allow_self_signed' => true,
             'verify_peer' => false,
@@ -80,7 +78,7 @@ class Mail extends MailBase
 
         $level = static::$debug_level ?? $level ?? $default_debug_level ?? 4;
 
-        static::Config::get([
+        static::config([
             'SMTPDebug' => $level
         ]);
 

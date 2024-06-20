@@ -7,7 +7,7 @@ use boctulus\SW\core\libs\Config;
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
 
-    Version: -- 
+    Version: 3 
 */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -125,6 +125,21 @@ if (!function_exists('db_errors')){
 }
 
 db_errors(false);
+
+
+/*
+	Cargo traducciones
+*/
+
+if (php_sapi_name() === 'cli'){
+	add_action( 'init', function() {
+		$domain = get_text_domain(); 
+		load_plugin_textdomain( $domain, false, basename( dirname( __FILE__ ) ) . "/languages/" );
+	} );
+} else {	
+	$domain = get_text_domain();
+	load_plugin_textdomain( $domain, false, basename( dirname( __FILE__ ) ) . "/languages/" );
+}
 
 
 if ((php_sapi_name() === 'cli') || (isset($_GET['show_errors']) && $_GET['show_errors'] == 1)){

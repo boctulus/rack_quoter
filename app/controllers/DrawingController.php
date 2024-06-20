@@ -2,7 +2,7 @@
 
 namespace boctulus\SW\controllers;
 
-use boctulus\SW\core\libs\Files;
+use boctulus\SW\core\libs\HTTP;
 use boctulus\SW\core\libs\Logger;
 use boctulus\SW\core\libs\StdOut;
 use boctulus\SW\core\libs\Imaginator;
@@ -15,7 +15,7 @@ class DrawingController
 {
     function __construct()
     {
-        _cors(); // helper
+        HTTP::cors(); //
 
         if (isset($_GET['debug'])){
             Imaginator::disable();

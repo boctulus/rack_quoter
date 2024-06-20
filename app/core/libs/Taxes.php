@@ -6,6 +6,9 @@
 
 namespace boctulus\SW\core\libs;
 
+/*
+    Usar el Trait o mover el codigo de TaxHandlerTrait aqui
+*/
 class Taxes {
     static function VATapplied(){
         return wc_prices_include_tax();

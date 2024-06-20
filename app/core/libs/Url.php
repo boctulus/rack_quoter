@@ -7,7 +7,7 @@
 namespace boctulus\SW\core\libs;
 
 use boctulus\SW\core\libs\Strings;
-use boctulus\SW\core\libs\Arrays;
+use boctulus\SW\core\libs\Config;
 
 class Url
 {    

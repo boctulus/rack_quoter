@@ -3,16 +3,14 @@
 namespace boctulus\SW\core\controllers;
 
 use boctulus\SW\core\Constants;
-use boctulus\SW\core\libs\Cache;
-use boctulus\SW\core\libs\Config;
 use boctulus\SW\core\libs\DB;
-use boctulus\SW\core\libs\Factory;
+use boctulus\SW\core\libs\Cache;
 use boctulus\SW\core\libs\Files;
-use boctulus\SW\core\libs\i18n\Translate;
-use boctulus\SW\core\libs\PHPLexicalAnalyzer;
 use boctulus\SW\core\libs\Schema;
 use boctulus\SW\core\libs\StdOut;
+use boctulus\SW\core\libs\Factory;
 use boctulus\SW\core\libs\Strings;
+use boctulus\SW\core\libs\i18n\Translate;
 
 /*
     Class builder
@@ -992,13 +990,17 @@ class MakeControllerBase extends Controller
             }
         }
 
-       /*
+        /*
             Repito para tablas puente con las que no hay relación directa
             => no aparencen antes
         */
 
-        $dir = get_schema_path(null, $from_db ?? null);
-        include $dir . 'Pivots.php'; 
+        if (isset($pivot_data['pivots'])){
+            $pivots = $pivot_data['pivots'];
+        } else {
+            $dir = get_schema_path(null, $from_db ?? null);
+            include $dir . 'Pivots.php'; 
+        }        
 
         // 
 
@@ -1133,7 +1135,7 @@ class MakeControllerBase extends Controller
         DB::getConnection();
         $current = DB::getCurrentConnectionId(true);
 
-        if ($current == Config::get()['db_connection_default']){
+        if ($current == config()['db_connection_default']){
             $file = str_replace('namespace boctulus\SW\schemas', 'namespace boctulus\SW\schemas' . "\\$current", $file);
 
             Files::mkDir(SCHEMA_PATH . $current);
@@ -1528,7 +1530,7 @@ class MakeControllerBase extends Controller
         $current = DB::getCurrentConnectionId(true);
         
         $folder = '';
-        if ($current == Config::get()['db_connection_default']){
+        if ($current == config()['db_connection_default']){
             $file = str_replace('namespace boctulus\SW\models', 'namespace boctulus\SW\models' . "\\$current", $file);
 
             Files::mkDir(MODELS_PATH . $current);

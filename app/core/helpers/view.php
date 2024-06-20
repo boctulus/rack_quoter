@@ -173,6 +173,8 @@ function css_file(string $src, $dependencies = [], $version = null, $media = 'al
         $version = 'asset-' . Plugins::getVersion();
     }
 
+    $src = Files::convertSlashes($src, '/');
+
     // dd([
     //     $handle, $src 
     // ]);
@@ -271,10 +273,14 @@ function get_view_src(string $filename){
 }
 
 function get_view(string $view_path, ?Array $vars = null){
+    $view_path = realpath($view_path);
+
     return include_no_render(get_view_src($view_path), $vars);
 }
 
 function view(string $view_path, array $vars  = null){
+    $view_path = realpath($view_path);
+    
     if (!empty($vars)){
         extract($vars);
     }      

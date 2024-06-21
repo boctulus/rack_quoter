@@ -16,7 +16,7 @@ $dims = $cfg['dims'] or die("Falta definir dims en config.php");
 <script>
   const base_url = '<?= Url::getBaseUrl() ?>'
 
-  const endpoint_calc      = base_url + '/api/drawing/calc'
+  const endpoint_calc      = base_url + '/api/drawing/calc/pallets'
   const endpoint_draw      = base_url + '/api/drawing/preview'
   const endpoint_datasheet = base_url + '/api/drawing/datasheet'
   const verb = 'GET'
@@ -208,8 +208,6 @@ $dims = $cfg['dims'] or die("Falta definir dims en config.php");
   const getPalletQty = async (endpoint_calc, params, verb, dataType, contentType) => {
     const url = endpoint_calc + '?' + params;
 
-    console.log(url)
-
     try {
       const res = await jQuery.ajax({
         url: url,
@@ -222,7 +220,7 @@ $dims = $cfg['dims'] or die("Falta definir dims en config.php");
       return res.data.pallets;
     } catch (error) {
       console.log('Error:', error);
-      throw new Error('Error al obtener la cantidad de pallets');
+      throw new Error(`Error al obtener la cantidad de pallets desde ${url}`);
     }
   };
 

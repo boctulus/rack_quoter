@@ -2,6 +2,8 @@
 
 namespace boctulus\SW\core\libs;
 
+use boctulus\SW\core\libs\Logger;
+
 /*
     Utilities for GD lib
 
@@ -25,7 +27,13 @@ class Imaginator
         static::$rendering = false;
     }
 
-    function __construct($w, $h){
+    function __construct($w = null, $h = null){
+        // En caso de generar el lienzo a partir de una imagen, 
+        // el constructor no debe instanciar GdImage
+        if ($w === null || $h == null){
+            return;
+        }
+
         $this->w = $w;
         $this->h = $h;
 
@@ -311,6 +319,10 @@ class Imaginator
         imagecopymerge($dst_image->getImage(), $this->im, $dst_x, $dst_y, $src_x, $src_y, $src_width, $src_height, $pct);
     }
 
+    function loadImage(string $file){
+        $image    = Files::readOrFail($file);        
+        $this->im = imagecreatefromstring($image);
+    }
 }
 
 

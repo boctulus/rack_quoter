@@ -173,7 +173,7 @@ s
   // Limpio valor de aisle si selecciona de la lista
   jQuery("input[type='radio'][name='aisle']").click(() => {
     jQuery('input#custom-aisle-dim').val('')
-  });
+});
 
   const getImageWidth = () => {
     return document.querySelector('.main-img').offsetWidth;
@@ -426,7 +426,8 @@ s
                   </div>
                   <div class="row" class="main-img">
                     <div class="col-12">
-                      <img src="<?= asset('/img/1x1-00ff007f.png') ?>" class="img-responsive" id="rendered-img">
+                      <!-- debo eliminar la "/" si la hubiera del comienzo -->
+                      <img src="<?= asset('img/1x1-00ff007f.png') ?>" class="img-responsive" id="rendered-img">
                     </div>
                   </div>
                   <div class="row">

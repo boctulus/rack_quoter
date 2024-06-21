@@ -138,21 +138,18 @@ function shortcode_asset($resource)
 }
 
 function assets_url(?string $resource = null){    
-    if (Files::isAbsolutePath($resource)){
-        $resource =  Strings::substract($resource, Constants::ROOT_PATH);
-    } else {
-        $resource = 'assets/' . $resource;
-    }
-
-    // dd($resource, 'RES');
-
-    $resource = str_replace('\\', '/', $resource);
+    // dd($resource, 'RES'); 
     
-    $url = plugin_url() . '/';    
+    $resource = Files::normalize($resource, '/');
+    // dd($resource, 'RES'); 
+    
+    $resource = 'assets/' . trim($resource, '/');
+    // dd($resource, 'RES'); 
+
+    $url = plugin_dir_url(Constants::ROOT_PATH . 'index.php');   
+    // dd($url, 'URL'); 
 
     $url = $url . (!$resource === null ? '' : $resource);
-
-    $url = Files::normalize($url, '/');
 
     return $url;
 }

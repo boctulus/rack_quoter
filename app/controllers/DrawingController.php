@@ -2,6 +2,7 @@
 
 namespace boctulus\SW\controllers;
 
+use boctulus\SW\core\Constants;
 use boctulus\SW\core\libs\HTTP;
 use boctulus\SW\core\libs\Logger;
 use boctulus\SW\core\libs\StdOut;
@@ -86,7 +87,7 @@ class DrawingController
                 $row_count++;
             }
 
-            StdOut::pprint(M::toFeetAndInches($w_acc), 'w acc');
+            StdOut::pprint('w acc : ' . M::toFeetAndInches($w_acc));
             // StdOut::pprint("$row_count : row count");
 
             //  StdOut::pprint($h_feets, 'h');
@@ -168,8 +169,8 @@ class DrawingController
             'steelblue' => [70,130,180]
         ];
 
-        $font_1 = ASSETS_PATH . 'fonts/Swiss 721 Light BT.ttf';
-        $font_2 = ASSETS_PATH . 'fonts/Swiss721BT-Light.otf';
+        $font_1 = Constants::ASSETS_PATH . 'fonts/Swiss 721 Light BT.ttf';
+        $font_2 = Constants::ASSETS_PATH . 'fonts/Swiss721BT-Light.otf';
 
         if ($row_count > 5){
             $alto *= intval($row_count/4); 
@@ -303,13 +304,28 @@ class DrawingController
 
     function render_datasheet()
     {
+        global $upright_height, $upright_depth, $beam_length, $beam_levels, $l_feets, $w_feets, $aisle, $len;
+        global $w, $w_acc, $row_count, $boxes_per_row, $bl, $bl_with_margins;
+
         $upright_depth  = $_GET['depth']  ?? null;
         $upright_height = $_GET['height'] ?? null;
         $w_feets        = $_GET['width']  ?? null;
-       
-        $im = new Imaginator();
 
-        $im->loadImage(SHORTCODES_PATH ."rack_quoter/assets/img/datasheet_blank.jpeg");
+        // Definir dimensiones y colores
+        $ancho = 800; // $_GET['img_w']
+        $alto  = 600; // antes 1280
+
+        if ($row_count > 5){
+            $alto *= intval($row_count/4); 
+        }
+
+        if ($boxes_per_row > 22){
+            $ancho *= intval($boxes_per_row/22);
+        }
+       
+        $im = new Imaginator($ancho, $alto); ///////////
+
+        $im->loadImage(Constants::SHORTCODES_PATH ."rack_quoter/assets/img/datasheet_blank.jpeg");
 
         $im->createColor('black', 0,0,0);
         $im->createColor('white', 255,255,255);
@@ -320,7 +336,7 @@ class DrawingController
             $im->invertColors();
         }
 
-        $font_1 = ASSETS_PATH . 'fonts/Swiss 721 Light BT.ttf';
+        $font_1 = Constants::ASSETS_PATH . 'fonts/Swiss 721 Light BT.ttf';
         //$font_2 = ASSETS_PATH . 'fonts/Swiss721BT-Light.otf';
 
         // Height

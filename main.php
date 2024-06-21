@@ -36,5 +36,5 @@ function admin_assets(){
 // (new WpAjaxController());
 
 
-// new Main();
+new Main();
 

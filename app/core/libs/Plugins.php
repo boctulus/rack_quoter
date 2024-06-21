@@ -15,6 +15,20 @@ if ( ! function_exists( 'get_plugins' ) ) {
 class Plugins
 {   
     const PLUGIN_DIR = ABSPATH .  'wp-content' . DIRECTORY_SEPARATOR . 'plugins' . DIRECTORY_SEPARATOR;
+    
+    /*
+        Devuelve el path completo al directorio /wp-content/plugins
+    */
+    static function pluginsDirectory(){
+        return Files::normalize(realpath(Constants::PLUGINS_PATH), '/');
+    }
+    
+    /*
+        Devuelve el nombre del directorio del plugin que no es lo mismo que el path completo
+    */
+    function currentPluginDirectory(){
+        return Strings::lastSegment(Files::normalize(realpath(Constants::ROOT_PATH), '/'), '/');
+    }
 
     /*
         https://wordpress.stackexchange.com/a/286761/99153

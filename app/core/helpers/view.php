@@ -13,8 +13,6 @@ use boctulus\SW\core\libs\Templates;
 
 /*
     @author Pablo Bozzolo < boctulus@gmail.com >
-
-    Version: 1.5 (transitional)
 */
 
 /*

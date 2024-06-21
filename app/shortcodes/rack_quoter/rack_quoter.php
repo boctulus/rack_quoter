@@ -16,11 +16,11 @@ class RackQuoter {
 
     public static function enqueue_assets() {
         $plugin_url = plugin_dir_url(__FILE__);
-        
+
         // Encolar CSS a nivel de plugin
-        wp_enqueue_style('rack-quoter-fontawesome', asset('third_party/fontawesome5/all.min.css'), [], '5.15.3');
-        wp_enqueue_style('rack-quoter-bootstrap', asset('third_party//bootstrap/3.x/bootstrap.min.css'), [], '3.3.7');
-        wp_enqueue_style('rack-quoter-normalize', asset('third_party/bootstrap/3.x/normalize.css'), [], '3.3.7');
+        css_file('third_party/fontawesome5/all.min.css',  [], '5.15.3');
+        css_file('third_party/bootstrap/3.x/bootstrap.min.css', [], '3.3.7');
+        css_file('third_party/bootstrap/3.x/normalize.css', [], '3.3.7');
  
         // Encolar JS a nivel de plugin
         wp_enqueue_script('rack-quoter-fontawesome', asset('third_party/fontawesome5/fontawesome-5.js'), [], '5.15.3', true);
@@ -28,7 +28,7 @@ class RackQuoter {
         wp_enqueue_script('rack-quoter-printthis', asset('third_party/printThis/printThis.js'), ['jquery'], '1.0.0', true);
         wp_enqueue_script('rack-quoter-url', asset('js/url.js'), ['jquery'], 'x1.0', true);
  
-        // JS personalizado a nivel del shortcode (interior)
+        // JS personalizado a nivel del shortcode (interior) (no aplica asset o shortcode_asset)
         wp_enqueue_style('rack-quoter-racks', $plugin_url . 'assets/css/racks.css', [], '1.0');
 	    wp_enqueue_style('rack-quoter-styles', $plugin_url . 'assets/css/styles.css', [], '1.0');
     }

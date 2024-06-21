@@ -103,8 +103,21 @@ function plugin_name(){
     return $plugin_name;
 }
 
+// OK
+function assets_url(?string $resource = null){        
+    $resource = Files::normalize($resource, '/');
+    $resource = 'assets/' . trim($resource, '/');
+
+    $url      = plugin_dir_url(Constants::ROOT_PATH . 'index.php');   
+    $url      = $url . (!$resource === null ? '' : $resource);
+
+    return $url;
+}
+
 /*
     Para ser usado dentro de un shortcode
+
+    Valido para imagenes ***
 
     Ej:
 
@@ -112,47 +125,18 @@ function plugin_name(){
 */
 function shortcode_asset($resource)
 {   
-    $resource = Files::convertSlashes($resource, Files::LINUX_DIR_SLASH);
-
-    $resource = Strings::substract($resource, 
-        Files::normalize(Constants::SHORTCODES_PATH, Files::LINUX_DIR_SLASH)
-    );
-
-    $resource = str_replace('/views/', '/assets/', $resource);
+    $plugins_dir = Files::normalize(realpath(Constants::PLUGINS_PATH), '/');    
+    $resource    = Files::normalize($resource, '/');    
+    $resource    = Strings::substract($resource, $plugins_dir);
     
-    $base = Config::get('base_url') ?? '';
-
-    if (Strings::endsWith('/', $base)){
-        $base = substr($base, 0, -1); 
-    }
+    $segments = explode('/', $resource);
     
-    $protocol   = is_cli() ? 'http'              : httpProtocol();
-    $domain     = is_cli() ? Env::get('APP_URL') : $_SERVER['HTTP_HOST'];
-
-    $f          = explode('/', str_replace('\\', '/', __DIR__));
-    $plugin_dir = $f[count($f)-4];
-
-    $url = "$protocol://$domain/wp-content/plugins/$plugin_dir/app/shortcodes/$resource";
+    $url = plugin_dir_url(Constants::ROOT_PATH . 'index.php') 
+    . str_replace('/views/', '/assets/', implode('/', array_slice($segments, 2)));
 
     return $url;    
 }
 
-function assets_url(?string $resource = null){    
-    // dd($resource, 'RES'); 
-    
-    $resource = Files::normalize($resource, '/');
-    // dd($resource, 'RES'); 
-    
-    $resource = 'assets/' . trim($resource, '/');
-    // dd($resource, 'RES'); 
-
-    $url = plugin_dir_url(Constants::ROOT_PATH . 'index.php');   
-    // dd($url, 'URL'); 
-
-    $url = $url . (!$resource === null ? '' : $resource);
-
-    return $url;
-}
 
 function asset(string $resource){
     return assets_url($resource);

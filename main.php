@@ -16,9 +16,6 @@ if ((php_sapi_name() === 'cli') || (isset($_GET['show_errors']) && $_GET['show_e
    error_reporting(E_ALL);
 }
 
-
-dd(asset('img/1x1-00ff007f.png')); 
-
 // Templates::set('astra');
 
 // Shortcodes

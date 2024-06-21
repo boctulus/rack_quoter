@@ -10,7 +10,7 @@ use boctulus\SW\core\libs\Url;
 $cfg  = Config::get();
 
 $dims = $cfg['dims'] or die("Falta definir dims en config.php");
-s
+
 ?>
 
 <script>
